@@ -39,49 +39,48 @@ from torch import nn
 from torch.functional import F
 from copy import copy
 import seaborn as sns
+
+from utils import get_graph_props, make_2d_graph
+
 sns.set_style("whitegrid")
 
-def make_2d_graph(m, n, periodic=False, return_pos=False):
-    network = nx.grid_2d_graph(m, n, periodic=False, create_using=None)
-    matrix = nx.linalg.graphmatrix.adjacency_matrix(network).todense()
-    matrix = np.array(matrix).astype(float)
-    return matrix
+def get_orthonromal_eigvec(eigval, eigvec):
+   #We transform our eigenvectors into an orthonormalbasis (next 4 cells) such that it is in the Stiefel manifold
 
-def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
-    ran = range(A.shape[0])
+    eps = 2.220446049250313e-6
+    i = 0
+    k= 0 
+    liste = []
+    for j in range(eigval.size):
+        if not liste:
+            liste.append(i)
+        elif round(eigval[j-1],4)==round(eigval[j],4):
+            #liste.append(i)
+            k = k+1
+        else: 
+            i = i+1
+            k =k+1
+            liste.append(k)
+    liste.append(eigvec.shape[1])
 
-    D = np.zeros_like(A)
-    D[ran, ran] = np.abs(np.sum(A, axis=1) - A[ran, ran])
-    L = D - A
+    ll = []
+    siz = 0
+    for i in range(1,len(liste)):
+        #print(i, liste[i-1], liste[i], eigvec[:,liste[i-1]: liste[i]].shape)
+        siz = siz + eigvec[:,liste[i-1]: liste[i]].shape[1]
+        ll.append(eigvec[:,liste[i-1]: liste[i]])
+    
+    lll = []
+    for i in ll:
+        if np.linalg.norm(np.matmul(np.transpose(i), i)) > eps:
+            lll.append(scipy.linalg.orth(i))
+        else: lll.append(i)
 
-    if (normalize_L is None) or (normalize_L=='none') or (normalize_L == False):
-        pass
-    elif (normalize_L == 'inv'):
-        Dinv = np.linalg.inv(D)
-        L = np.matmul(Dinv, L)  # Normalized laplacian
-    elif (normalize_L == 'sym'):
-        Dinv = np.sqrt(np.linalg.inv(D))
-        L = np.matmul(np.matmul(Dinv, L), Dinv)
-    elif (normalize_L == 'abs'):
-        L = np.abs(L)
-    else:
-        raise ValueError('unsupported normalization option')
+    hi = lll[0]
+    for i in range(0,len(lll)-1):
+        hi = np.concatenate((hi, lll[i+1]), axis=1)
 
-    eigval, eigvec = np.linalg.eigh(L)
-    eigval =  np.real(eigval)
-    # eigidx = np.argsort(eigval)[::-1]
-    eigidx = np.argsort(eigval)
-    eigval = eigval[eigidx]
-    eigvec = eigvec[:, eigidx]
-
-
-    L_inv = np.linalg.pinv(L)
-
-    if shift_to_zero_diag:
-        L_inv_diag = L_inv[np.eye(L.shape[0])>0]
-        L_inv = (L_inv - L_inv_diag[:, np.newaxis])
-
-    return D, L, L_inv, eigval, eigvec
+    return hi
 
 class Model_RGD(nn.Module):
     """Custom Pytorch model for gradient optimization.
@@ -177,16 +176,10 @@ def main():
     parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
-    parser.add_argument('--gnn', type=str, default='gcn',
-                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
-    parser.add_argument('--drop_ratio', type=float, default=0.5,
-                        help='dropout ratio (default: 0.5)')
-    parser.add_argument('--num_layer', type=int, default=5,
-                        help='number of GNN message passing layers (default: 5)')
-    parser.add_argument('--emb_dim', type=int, default=75,
-                        help='dimensionality of hidden units in GNNs (default: 300)')
-    parser.add_argument('--batch_size', type=int, default=32,
-                        help='input batch size for training (default: 32)')
+    parser.add_argument('--p_laplacian', type=int, default=1,
+                        help='the value for p-laplcian (default: 1)')
+    parser.add_argument('--num_eigs', type=int, default=5,
+                        help='number of eigenvectors (default: 5)')
     parser.add_argument('--epochs', type=int, default=100,
                         help='number of epochs to train (default: 100)')
     parser.add_argument('--num_workers', type=int, default=0,
@@ -206,7 +199,7 @@ def main():
     # dataset = PygGraphPropPredDataset(name = args.dataset)
 
     grid_sizes = [(64,24)]
-    num_eigs = 5 #gives the dimension of the embedding or: num_eigs - 1 is the number of eigenvectors we calculate
+    num_eigs = args.num_eigs #gives the dimension of the embedding or: num_eigs - 1 is the number of eigenvectors we calculate
     plot_labels = False
     add_side_plots = True
 
@@ -216,52 +209,17 @@ def main():
 
     D, L, L_inv, eigval, init_eigvec = get_graph_props(A,normalize_L='none')
 
-    p = 1
-    steps = 930
+    p = args.p_laplacian
     alpha = 0.01
 
-    #We transform our eigenvectors into an orthonormalbasis (next 4 cells) such that it is in the Stiefel manifold
+    hi = get_orthonromal_eigvec(eigval,eigvec)
 
-    eps = 2.220446049250313e-6
-    i = 0
-    k= 0 
-    liste = []
-    for j in range(eigval.size):
-        if not liste:
-            liste.append(i)
-        elif round(eigval[j-1],4)==round(eigval[j],4):
-            #liste.append(i)
-            k = k+1
-        else: 
-            i = i+1
-            k =k+1
-            liste.append(k)
-    liste.append(eigvec.shape[1])
-
-    ll = []
-    siz = 0
-    for i in range(1,len(liste)):
-        #print(i, liste[i-1], liste[i], eigvec[:,liste[i-1]: liste[i]].shape)
-        siz = siz + eigvec[:,liste[i-1]: liste[i]].shape[1]
-        ll.append(eigvec[:,liste[i-1]: liste[i]])
-    
-    lll = []
-    for i in ll:
-        if np.linalg.norm(np.matmul(np.transpose(i), i)) > eps:
-            lll.append(scipy.linalg.orth(i))
-        else: lll.append(i)
-
-    hi = lll[0]
-    for i in range(0,len(lll)-1):
-        hi = np.concatenate((hi, lll[i+1]), axis=1)
 
     W = torch.tensor(A)
 
     n= eigval.shape[0]
     K = num_eigs
-    epochs = 1000
-    # n = 64
-    # K = 5
+    epochs = args.epochs
 
     # instantiate model
     W = torch.tensor(A).to(device)
@@ -285,7 +243,7 @@ def main():
     #end = timer()
     losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs) 
     end = timer()
-    print(end - start, " Sekunden")
+    print(end - start, " second")
 
     # m.to('cpu')
 
@@ -294,7 +252,7 @@ def main():
 
     m.to('cpu')
     for p in range(1,2):
-        p = 1
+        p = args.p_laplacian
         alpha = 0.01
         #F = init_eigvec[:, 0:num_eigs]
         print('p = ', p, ' step size = ', alpha)
