@@ -82,6 +82,100 @@ def get_orthonromal_eigvec(eigval, eigvec):
 
     return hi
 
+def plot_fig(grid_sizes, p_eigvec,num_eigs,add_side_plots=True,plot_labels=False):
+
+        for grid_size in grid_sizes:
+
+            # Initialize figure sizes
+            size_factor = 5 / grid_size[1]
+            node_size = 800 * size_factor
+            figsize = [g * size_factor for g in grid_size]
+
+            # Initialize adjacency
+            A = make_2d_graph(*grid_size, periodic=False) 
+            # print(A)
+
+            # Get graph, laplacian, spacial positions
+            # D, L, L_inv, eigval,eigvec = get_graph_props(A)
+            fig = plt.figure()
+            # plt.scatter(np.arange(A.shape[0]), L_inv[0, :])
+            graph = nx.from_numpy_array(A)
+            pos = [(ii, jj) for ii in range(grid_size[0]) for jj in range(grid_size[1])]
+
+            # Plot all the eigenvectors
+            #for ii in range(num_eigs-1):
+            for ii in range(num_eigs):
+
+                im_dir = f'images_out/Eig grid side plots/grid-size-{grid_size}/'
+
+                # Prepare the figure and subplots
+                if add_side_plots:
+                    grid_factor = grid_size[1]/grid_size[0]
+                    new_fig_factor = np.sqrt((5*grid_factor + 2) / 7)
+                    new_figsize = [figsize[0], figsize[1]/new_fig_factor]
+                    f, axes = plt.subplots(3, 3, figsize=new_figsize,
+                        gridspec_kw={'width_ratios': [1, 5, 1], 'height_ratios': [1, 5*grid_factor, 1]})
+                    f.suptitle(f'$\phi_{ii}$ - grid_size {grid_size}')
+                    axes[0, 0].axis('off')
+                    axes[0, 2].axis('off')
+                    axes[2, 0].axis('off')
+                    axes[2, 2].axis('off')
+                    plt.sca(axes[1, 1])
+                    new_node_size = node_size * 0.5
+                    
+                else:
+                    plt.figure(figsize=figsize)
+                    new_node_size = node_size
+                    im_dir = f'images_out/Eig grid/grid-size-{grid_size}/'
+                
+                # Plot the colored graph with eigenvectors
+                node_vals = np.real(p_eigvec[:, ii])
+                node_vals /= np.max(np.abs(node_vals)) + 1e-6
+                labels = {ii: '{:.3f}'.format(node_vals[ii]) for ii in range(len(node_vals))} if plot_labels else {}
+                plt.gca().set_aspect('equal')
+                nx.draw(graph, pos=pos, node_color=node_vals, vmin=-1, vmax=1, cmap='PiYG', 
+                        labels=labels, node_size=new_node_size, ax=plt.gca())
+                
+
+                if add_side_plots:
+                    # Plot the eigenvectors on left
+                    y = np.arange(grid_size[1])
+                    axes[1, 0].plot(node_vals[:grid_size[1]], y, marker='o')
+                    axes[1, 0].set_xlim(-1, 1)
+                    axes[1, 0].set_xticks([-1, 0, 1])
+                    axes[1, 0].set_yticks([])
+                    axes[1, 0].axvline(0, linestyle=':')
+                    axes[1, 0].set_title('left column')
+
+                    # Plot the eigenvectors on the right
+                    axes[1, 2].plot(node_vals[-grid_size[1]:], y, marker='o')
+                    axes[1, 2].set_xlim(-1, 1)
+                    axes[1, 2].set_xticks([-1, 0, 1])
+                    axes[1, 2].set_yticks([])
+                    axes[1, 2].axvline(0, linestyle=':')
+                    axes[1, 2].set_title('right column')
+
+                    # Plot the eigenvectors on bottom
+                    x = np.arange(grid_size[0])
+                    axes[2, 1].plot(x, node_vals[::grid_size[1]], marker='o')
+                    axes[2, 1].set_ylim(-1, 1)
+                    axes[2, 1].set_xticks([])
+                    axes[2, 1].set_yticks([-1, 0, 1])
+                    axes[2, 1].axhline(0, linestyle=':')
+                    axes[2, 1].set_title('bottom row')
+
+                    # Plot the eigenvectors on top
+                    axes[0, 1].plot(x, node_vals[grid_size[1]-1::grid_size[1]], marker='o')
+                    axes[0, 1].set_ylim(-1, 1)
+                    axes[0, 1].set_xticks([])
+                    axes[0, 1].set_yticks([-1, 0, 1])
+                    axes[0, 1].axhline(0, linestyle=':')
+                    axes[0, 1].set_title('top row')
+
+                    # fig.savefig(f'./phi_{ii}.png')
+                    plt.show()
+                    # print(ii, node_vals)
+
 class Model_RGD(nn.Module):
     """Custom Pytorch model for gradient optimization.
     """
@@ -207,8 +301,6 @@ def main():
     print(A.shape)
     D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
 
-    D, L, L_inv, eigval, init_eigvec = get_graph_props(A,normalize_L='none')
-
     p = args.p_laplacian
     alpha = 0.01
 
@@ -244,9 +336,7 @@ def main():
     losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs) 
     end = timer()
     print(end - start, " second")
-
-    # m.to('cpu')
-
+    
     print('p = ', p, ' step size = ', alpha)
 
 
@@ -257,105 +347,10 @@ def main():
         #F = init_eigvec[:, 0:num_eigs]
         print('p = ', p, ' step size = ', alpha)
 
-        
-        #for i in range(0,steps):
-            #should give us the full approximation matrix of p-eigenfunctions
-            #k'th row is the embedding of node k
-        #  grad, ss = calc_grad(A, F, p)
-        #  F = F - alpha*ss*grad
 
-        for grid_size in grid_sizes:
+        p_eigvec = np.array(m.weight.detach().numpy())
 
-            # Initialize figure sizes
-            size_factor = 5 / grid_size[1]
-            node_size = 800 * size_factor
-            figsize = [g * size_factor for g in grid_size]
-
-            # Initialize adjacency
-            A = make_2d_graph(*grid_size, periodic=False) 
-            # print(A)
-
-            # Get graph, laplacian, spacial positions
-            # D, L, L_inv, eigval,eigvec = get_graph_props(A)
-            p_eigvec = np.array(m.weight.detach().numpy())
-            fig = plt.figure()
-            # plt.scatter(np.arange(A.shape[0]), L_inv[0, :])
-            graph = nx.from_numpy_array(A)
-            pos = [(ii, jj) for ii in range(grid_size[0]) for jj in range(grid_size[1])]
-
-            # Plot all the eigenvectors
-            #for ii in range(num_eigs-1):
-            for ii in range(num_eigs):
-
-                im_dir = f'images_out/Eig grid side plots/grid-size-{grid_size}/'
-
-                # Prepare the figure and subplots
-                if add_side_plots:
-                    grid_factor = grid_size[1]/grid_size[0]
-                    new_fig_factor = np.sqrt((5*grid_factor + 2) / 7)
-                    new_figsize = [figsize[0], figsize[1]/new_fig_factor]
-                    f, axes = plt.subplots(3, 3, figsize=new_figsize,
-                        gridspec_kw={'width_ratios': [1, 5, 1], 'height_ratios': [1, 5*grid_factor, 1]})
-                    f.suptitle(f'$\phi_{ii}$ - grid_size {grid_size}')
-                    axes[0, 0].axis('off')
-                    axes[0, 2].axis('off')
-                    axes[2, 0].axis('off')
-                    axes[2, 2].axis('off')
-                    plt.sca(axes[1, 1])
-                    new_node_size = node_size * 0.5
-                    
-                else:
-                    plt.figure(figsize=figsize)
-                    new_node_size = node_size
-                    im_dir = f'images_out/Eig grid/grid-size-{grid_size}/'
-                
-                # Plot the colored graph with eigenvectors
-                node_vals = np.real(p_eigvec[:, ii])
-                node_vals /= np.max(np.abs(node_vals)) + 1e-6
-                labels = {ii: '{:.3f}'.format(node_vals[ii]) for ii in range(len(node_vals))} if plot_labels else {}
-                plt.gca().set_aspect('equal')
-                nx.draw(graph, pos=pos, node_color=node_vals, vmin=-1, vmax=1, cmap='PiYG', 
-                        labels=labels, node_size=new_node_size, ax=plt.gca())
-                
-
-                if add_side_plots:
-                    # Plot the eigenvectors on left
-                    y = np.arange(grid_size[1])
-                    axes[1, 0].plot(node_vals[:grid_size[1]], y, marker='o')
-                    axes[1, 0].set_xlim(-1, 1)
-                    axes[1, 0].set_xticks([-1, 0, 1])
-                    axes[1, 0].set_yticks([])
-                    axes[1, 0].axvline(0, linestyle=':')
-                    axes[1, 0].set_title('left column')
-
-                    # Plot the eigenvectors on the right
-                    axes[1, 2].plot(node_vals[-grid_size[1]:], y, marker='o')
-                    axes[1, 2].set_xlim(-1, 1)
-                    axes[1, 2].set_xticks([-1, 0, 1])
-                    axes[1, 2].set_yticks([])
-                    axes[1, 2].axvline(0, linestyle=':')
-                    axes[1, 2].set_title('right column')
-
-                    # Plot the eigenvectors on bottom
-                    x = np.arange(grid_size[0])
-                    axes[2, 1].plot(x, node_vals[::grid_size[1]], marker='o')
-                    axes[2, 1].set_ylim(-1, 1)
-                    axes[2, 1].set_xticks([])
-                    axes[2, 1].set_yticks([-1, 0, 1])
-                    axes[2, 1].axhline(0, linestyle=':')
-                    axes[2, 1].set_title('bottom row')
-
-                    # Plot the eigenvectors on top
-                    axes[0, 1].plot(x, node_vals[grid_size[1]-1::grid_size[1]], marker='o')
-                    axes[0, 1].set_ylim(-1, 1)
-                    axes[0, 1].set_xticks([])
-                    axes[0, 1].set_yticks([-1, 0, 1])
-                    axes[0, 1].axhline(0, linestyle=':')
-                    axes[0, 1].set_title('top row')
-
-                    # fig.savefig(f'./phi_{ii}.png')
-                    plt.show()
-                    # print(ii, node_vals)
+        plot_fig(grid_sizes, p_eigvec,num_eigs)
 
 
 if __name__ == "__main__":
