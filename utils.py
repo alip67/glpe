@@ -1,9 +1,10 @@
 
 import numpy as np
 import networkx as nx
+import os
 
 
-
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 def make_2d_graph(m, n, periodic=False, return_pos=False):
     network = nx.grid_2d_graph(m, n, periodic=False, create_using=None)

@@ -33,7 +33,7 @@ import torch.nn as nn
 
 from typing import Any, Optional
 from torch_geometric.data import Data
-from torch_geometric import DataLoader
+from torch_geometric.loader import DataLoader
 
 #import torch_geometric.transforms as T
 # from torch_geometric.nn import GCNConv
@@ -569,7 +569,27 @@ def main():
     datal[0].test_mask = cora_dataset[0].test_mask
     datal[0].y  = cora_dataset[0].y
 
-    loader = DataLoader(datal, batch_size=32)
+    # loader = geom_data.DataLoader(datal, batch_size=32)
+
+
+        # Standard CORA dataset
+    node_gnn_model, node_gnn_result = train_node_classifier(model_name="GCN",
+                                                            layer_name="GCN",
+                                                            dataset=cora_dataset, 
+                                                            c_hidden=16, 
+                                                            num_layers=2,
+                                                            dp_rate=0.1)
+    print_results(node_gnn_result)
+
+
+        # Pretransformed with p-LPE
+    node_gnn_model, node_gnn_result = train_node_classifier(model_name="GCN",
+                                                            layer_name="GCN",
+                                                            dataset=datal, 
+                                                            c_hidden=16, 
+                                                            num_layers=2,
+                                                            dp_rate=0.1)
+    print_results(node_gnn_result)
 
         # Standard CORA dataset
     node_gnn_model, node_gnn_result = train_node_classifier(cora_dataset,

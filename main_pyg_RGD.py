@@ -40,7 +40,7 @@ from torch.functional import F
 from copy import copy
 import seaborn as sns
 
-from utils import get_graph_props, make_2d_graph
+from utils import get_graph_props, make_2d_graph,ROOT_DIR
 
 sns.set_style("whitegrid")
 
@@ -107,6 +107,9 @@ def plot_fig(grid_sizes, p_eigvec,num_eigs,add_side_plots=True,plot_labels=False
             for ii in range(num_eigs):
 
                 im_dir = f'images_out/Eig grid side plots/grid-size-{grid_size}/'
+                path = os.path.join(ROOT_DIR, im_dir)
+                if not os.path.exists(path):
+                    os.makedirs(path)
 
                 # Prepare the figure and subplots
                 if add_side_plots:
@@ -122,6 +125,7 @@ def plot_fig(grid_sizes, p_eigvec,num_eigs,add_side_plots=True,plot_labels=False
                     axes[2, 2].axis('off')
                     plt.sca(axes[1, 1])
                     new_node_size = node_size * 0.5
+                    # im_dir = f'images_out/Eig grid/grid-size-{grid_size}/'
                     
                 else:
                     plt.figure(figsize=figsize)
@@ -172,7 +176,7 @@ def plot_fig(grid_sizes, p_eigvec,num_eigs,add_side_plots=True,plot_labels=False
                     axes[0, 1].axhline(0, linestyle=':')
                     axes[0, 1].set_title('top row')
 
-                    # fig.savefig(f'./phi_{ii}.png')
+                    plt.savefig(f'{path}/phi_{ii}.png')
                     plt.show()
                     # print(ii, node_vals)
 
@@ -275,7 +279,7 @@ def main():
     parser.add_argument('--num_eigs', type=int, default=5,
                         help='number of eigenvectors (default: 5)')
     parser.add_argument('--epochs', type=int, default=100,
-                        help='number of epochs to train (default: 100)')
+                        help='number of epochs to train (default: 1000)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of workers (default: 0)')
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
