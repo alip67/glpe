@@ -9,7 +9,7 @@ from tqdm import tqdm
 import argparse
 import time
 import numpy as np
-import geotorch
+# import geotorch
 import geoopt
 
 ### importing OGB
@@ -22,6 +22,7 @@ from torch_geometric.datasets import Planetoid
 import torch_geometric
 import torch_geometric.nn as geom_nn
 import torch_geometric.data as geom_data
+from torch_geometric.loader import DataLoader
 
 import torch
 import argparse
@@ -160,7 +161,54 @@ class NodeLevelGNN(pl.LightningModule):
         _, acc = self.forward(batch, mode="test")
         self.log('test_acc', acc)
 
-def train_node_classifier(cora_dataset,device,num_eigs,CHECKPOINT_PATH,model_name, dataset, **model_kwargs):
+
+def train_node_classifier(model_name, dataset, **model_kwargs):
+    pl.seed_everything(42)
+    node_data_loader = DataLoader(dataset, batch_size=1)
+    
+    # Create a PyTorch Lightning trainer with the generation callback
+    root_dir = os.path.join(CHECKPOINT_PATH, "NodeLevel" + model_name)
+    os.makedirs(root_dir, exist_ok=True)
+    trainer = pl.Trainer(default_root_dir=root_dir,
+                         callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
+                         gpus=1 if str(device).startswith("cuda") else 0,
+                         max_epochs=200)
+                         #progress_bar_refresh_rate=0) # 0 because epoch size is 1
+    #trainer.logger._default_hp_metric = None # Optional logging argument that we don't need
+
+    # Check whether pretrained model exists. If yes, load it and skip training
+    #pretrained_filename = os.path.join(CHECKPOINT_PATH, f"NodeLevel{model_name}.ckpt")
+    #if os.path.isfile(pretrained_filename):
+    #    print("Found pretrained model, loading...")
+    #    model = NodeLevelGNN.load_from_checkpoint(pretrained_filename)
+    #else:
+    #    pl.seed_everything()
+    #    model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+    #    trainer.fit(model, node_data_loader, node_data_loader)
+    #    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    
+    pl.seed_everything()
+    if dataset == cora_dataset:
+      model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features, c_out=cora_dataset.num_classes, **model_kwargs)
+    else:
+      model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features + num_eigs, c_out=cora_dataset.num_classes, **model_kwargs)
+    trainer.fit(model, node_data_loader, node_data_loader)
+    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+
+
+    # Test best model on the test set
+    test_result = trainer.test(model, node_data_loader, verbose=False)
+    batch = next(iter(node_data_loader))
+    batch = batch.to(model.device)
+    _, train_acc = model.forward(batch, mode="train")
+    _, val_acc = model.forward(batch, mode="val")
+    result = {"train": train_acc,
+              "val": val_acc,
+              "test": test_result[0]['test_acc']}
+    return model, result
+
+
+def train_node_classifier_1(cora_dataset,device,num_eigs,CHECKPOINT_PATH,model_name, dataset, **model_kwargs):
     pl.seed_everything(42)
     node_data_loader = geom_data.DataLoader(dataset, batch_size=1)
     
@@ -186,7 +234,7 @@ def train_node_classifier(cora_dataset,device,num_eigs,CHECKPOINT_PATH,model_nam
     #    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
     
     pl.seed_everything()
-    if dataset == "cora":
+    if dataset == cora_dataset:
       model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features, c_out=cora_dataset.num_classes, **model_kwargs)
     else:
       model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features + num_eigs, c_out=cora_dataset.num_classes, **model_kwargs)
@@ -414,7 +462,7 @@ class Model_RGD(nn.Module):
         FFF.unsqueeze_(-1)
         FFF.unsqueeze_(-1)
         FFF = FFF.repeat(1,self.n,1,1)
-        b = torch.matmul(LL,FFF)
+        b = torch.matmul(LL.float(),FFF)
         b = torch.sum(b)
         return b
 
@@ -557,6 +605,7 @@ def main():
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.show()
+    plt.savefig('loss.png')
 
     m.to('cpu')
     xx = torch.cat((cora_dataset[0].x, m.weight),1)
@@ -569,21 +618,29 @@ def main():
     datal[0].test_mask = cora_dataset[0].test_mask
     datal[0].y  = cora_dataset[0].y
 
-    # loader = geom_data.DataLoader(datal, batch_size=32)
+    loader = DataLoader(datal, batch_size=32)
 
 
-        # Standard CORA dataset
-    node_gnn_model, node_gnn_result = train_node_classifier(model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset=cora_dataset, 
-                                                            c_hidden=16, 
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
-    print_results(node_gnn_result)
+    #     # Standard CORA dataset
+    # node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
+    #                                                         device,
+    #                                                         num_eigs,
+    #                                                         CHECKPOINT_PATH,
+    #                                                         model_name="GCN",
+    #                                                         layer_name="GCN",
+    #                                                         dataset=cora_dataset,
+    #                                                         c_hidden=16, 
+    #                                                         num_layers=2,
+    #                                                         dp_rate=0.1)
+    # print_results(node_gnn_result)
 
 
         # Pretransformed with p-LPE
-    node_gnn_model, node_gnn_result = train_node_classifier(model_name="GCN",
+    node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
+                                                            device,
+                                                            num_eigs,
+                                                            CHECKPOINT_PATH,
+                                                            model_name="GCN",
                                                             layer_name="GCN",
                                                             dataset=datal, 
                                                             c_hidden=16, 
@@ -591,18 +648,7 @@ def main():
                                                             dp_rate=0.1)
     print_results(node_gnn_result)
 
-        # Standard CORA dataset
-    node_gnn_model, node_gnn_result = train_node_classifier(cora_dataset,
-                                                            device,
-                                                            num_eigs,
-                                                            CHECKPOINT_PATH,
-                                                            model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset="cora", 
-                                                            c_hidden=16, 
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
-    print_results(node_gnn_result)
+
 
 
 
