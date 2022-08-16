@@ -56,9 +56,9 @@ import json
 from utils_1 import get_graph_props, make_2d_graph
 from gnn import GCN,SAGE
 from logger import Logger
-from data import get_dataset, set_fixed_train_val_test_split,set_ratio_train_valid_test_split
+from data import get_dataset, set_fixed_train_val_test_split, update_dataset
 from best_params import best_params_dict
-from utils_1 import ROOT_DIR
+from utils import ROOT_DIR
 
 sns.set_style("whitegrid")
 
@@ -287,7 +287,7 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
     return model, result
 
 
-def train_node_classifier_1(cora_dataset,device,num_eigs,CHECKPOINT_PATH,model_name, dataset, **model_kwargs):
+def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_name, dataset, **model_kwargs):
     pl.seed_everything(42)
     node_data_loader = geom_data.DataLoader(dataset, batch_size=1)
     
@@ -313,10 +313,10 @@ def train_node_classifier_1(cora_dataset,device,num_eigs,CHECKPOINT_PATH,model_n
     #    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
     
     pl.seed_everything()
-    if dataset == cora_dataset:
-      model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features, c_out=cora_dataset.num_classes, **model_kwargs)
+    if dataset_type == "original":
+      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     else:
-      model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features + num_eigs, c_out=cora_dataset.num_classes, **model_kwargs)
+      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features , c_out=dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
@@ -599,9 +599,10 @@ def main(cmd_opt):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    cora_dataset = torch_geometric.datasets.Planetoid(root=DATASET_PATH, name="Cora")
+    dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
 
-    cora_adj = to_dense_adj(cora_dataset[0].edge_index)
+
+    cora_adj = to_dense_adj(dataset_org[0].edge_index)
     cora_adj.squeeze_()
 
     num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
@@ -658,106 +659,109 @@ def main(cmd_opt):
     plt.show()
     plt.savefig('loss.png')
 
+    # cora_dataset = torch_geometric.datasets.Planetoid(root=DATASET_PATH, name="Cora")
+
     m.to('cpu')
-    xx = torch.cat((cora_dataset[0].x, m.weight),1)
+    # xx = torch.cat((cora_dataset[0].x, m.weight),1)
 
-    datal = [Data(xx,cora_dataset[0].edge_index)]
+    # datal = [Data(xx,cora_dataset[0].edge_index)]
+         
+    # datal[0].train_mask = cora_dataset[0].train_mask
+    # datal[0].val_mask = cora_dataset[0].val_mask
 
-    datal[0].train_mask = cora_dataset[0].train_mask
-    datal[0].val_mask = cora_dataset[0].val_mask
+    # datal[0].test_mask = cora_dataset[0].test_mask
+    # datal[0].y  = cora_dataset[0].y
 
-    datal[0].test_mask = cora_dataset[0].test_mask
-    datal[0].y  = cora_dataset[0].y
+    # loader = DataLoader(datal, batch_size=32)
 
-    loader = DataLoader(datal, batch_size=32)
-
-
+    if args.use_lp:
+        dataset = update_dataset(dataset_org, m.weight.data)
     opt = cmd_opt
+    dataset = dataset_org.copy()
+    dataset_enriched = update_dataset(dataset_org, m.weight.data)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataset = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # data = dataset[0]
 
-    data = dataset[0]
+    # if args.use_sage:
+    #         model = SAGE(data.num_features, opt['hidden_channels'],
+    #                     dataset.num_classes,opt['num_layers'],
+    #             opt['dropout']).to(device)
+    # else:
+    #         model = GCN(data.num_features, opt['hidden_channels'],
+    #             dataset.num_classes, opt['num_layers'],
+    #             opt['dropout']).to(device)
 
-    if args.use_sage:
-            model = SAGE(data.num_features, opt['hidden_channels'],
-                        dataset.num_classes,opt['num_layers'],
-                opt['dropout']).to(device)
-    else:
-            model = GCN(data.num_features, opt['hidden_channels'],
-                dataset.num_classes, opt['num_layers'],
-                opt['dropout']).to(device)
+    # if not opt['planetoid_split'] and opt['dataset'] in ['Cora','Citeseer','Pubmed']:
+    #     dataset.data = set_fixed_train_val_test_split(np.random.randint(0, 1000), dataset.data, num_development=5000 if opt["dataset"] == "CoauthorCS" else 1500)
 
-    if not opt['planetoid_split'] and opt['dataset'] in ['Cora','Citeseer','Pubmed']:
-        dataset.data = set_fixed_train_val_test_split(np.random.randint(0, 1000), dataset.data, num_development=5000 if opt["dataset"] == "CoauthorCS" else 1500)
-
-    data = dataset.data.to(device)
-    split_idx = {"train": mask_to_index(data.train_mask),"valid": mask_to_index(data.val_mask ), "test": mask_to_index(data.test_mask)}
-    train_idx = mask_to_index(data.train_mask).to(device)
-
-
-    evaluator = Evaluator(name='ogbn-arxiv')
-    logger = Logger(opt['num_splits'] * opt['runs'], args)
-    # internal_logger = Logger(10, args)
-    logger_report = Logger(opt['num_splits'], args)
-    logger_test = Logger(opt['num_splits'] * opt['runs'], args)
-
-    parameters = [p for p in model.parameters() if p.requires_grad]
-    print(sum(p.numel() for p in model.parameters()))
-    print_model_params(model)
-    optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
-    best_time = best_epoch = train_acc = val_acc = test_acc = 0
-
-    for run in range(args.runs):
-        model.reset_parameters()
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-        for epoch in range(1, 1 + args.epochs):
-            loss = train(model, data, train_idx, optimizer)
-            result = test(model, data, split_idx, evaluator)
-            logger.add_result(run, result)
-
-            if epoch % args.log_steps == 0:
-                train_acc, valid_acc, test_acc = result
-                # print(f'Run: {run + 1:02d}, '
-                #       f'Epoch: {epoch:02d}, '
-                #       f'Loss: {loss:.4f}, '
-                #       f'Train: {100 * train_acc:.2f}%, '
-                #       f'Valid: {100 * valid_acc:.2f}% '
-                #       f'Test: {100 * test_acc:.2f}%')
-        logger.print_statistics(run)
-    train_final, valid_final, test_final = logger.print_statistics()
-
-    result = {"Dataset": opt['dataset'], "train_ratio": int(opt['train_ratio']),
-                "Average Train": train_final, " Average Valid": valid_final, " Average Test": test_final}
-    result_file = open(args.outputpath, "a+", encoding='utf-8')
-    result_file.write(json.dumps(result) + '\n')
-    result_file.close()
+    # data = dataset.data.to(device)
+    # split_idx = {"train": mask_to_index(data.train_mask),"valid": mask_to_index(data.val_mask ), "test": mask_to_index(data.test_mask)}
+    # train_idx = mask_to_index(data.train_mask).to(device)
 
 
+    # evaluator = Evaluator(name='ogbn-arxiv')
+    # logger = Logger(opt['num_splits'] * opt['runs'], args)
+    # # internal_logger = Logger(10, args)
+    # logger_report = Logger(opt['num_splits'], args)
+    # logger_test = Logger(opt['num_splits'] * opt['runs'], args)
+
+    # parameters = [p for p in model.parameters() if p.requires_grad]
+    # print(sum(p.numel() for p in model.parameters()))
+    # print_model_params(model)
+    # optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
+    # best_time = best_epoch = train_acc = val_acc = test_acc = 0
+
+    # for run in range(args.runs):
+    #     model.reset_parameters()
+    #     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    #     for epoch in range(1, 1 + args.epochs):
+    #         loss = train(model, data, train_idx, optimizer)
+    #         result = test(model, data, split_idx, evaluator)
+    #         logger.add_result(run, result)
+
+    #         if epoch % args.log_steps == 0:
+    #             train_acc, valid_acc, test_acc = result
+    #             # print(f'Run: {run + 1:02d}, '
+    #             #       f'Epoch: {epoch:02d}, '
+    #             #       f'Loss: {loss:.4f}, '
+    #             #       f'Train: {100 * train_acc:.2f}%, '
+    #             #       f'Valid: {100 * valid_acc:.2f}% '
+    #             #       f'Test: {100 * test_acc:.2f}%')
+    #     logger.print_statistics(run)
+    # train_final, valid_final, test_final = logger.print_statistics()
+
+    # result = {"Dataset": opt['dataset'], "train_ratio": int(opt['train_ratio']),
+    #             "Average Train": train_final, " Average Valid": valid_final, " Average Test": test_final}
+    # result_file = open(args.outputpath, "a+", encoding='utf-8')
+    # result_file.write(json.dumps(result) + '\n')
+    # result_file.close()
 
 
-    #     # Standard CORA dataset
-    # node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
-    #                                                         device,
-    #                                                         num_eigs,
-    #                                                         CHECKPOINT_PATH,
-    #                                                         model_name="GCN",
-    #                                                         layer_name="GCN",
-    #                                                         dataset=cora_dataset,
-    #                                                         c_hidden=16, 
-    #                                                         num_layers=2,
-    #                                                         dp_rate=0.1)
-    # print_results(node_gnn_result)
 
 
-        # Pretransformed with p-LPE
-    node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
-                                                            device,
+        # Standard CORA dataset
+    node_gnn_model, node_gnn_result = train_node_classifier_1(device,
                                                             num_eigs,
                                                             CHECKPOINT_PATH,
+                                                            dataset_type="original",
                                                             model_name="GCN",
                                                             layer_name="GCN",
-                                                            dataset=datal, 
+                                                            dataset=dataset,
+                                                            c_hidden=16, 
+                                                            num_layers=2,
+                                                            dp_rate=0.1)
+    print_results(node_gnn_result)
+
+
+        #Pretransformed with p-LPE
+    node_gnn_model, node_gnn_result = train_node_classifier_1(device,
+                                                            num_eigs,
+                                                            CHECKPOINT_PATH,
+                                                            dataset_type="lp",
+                                                            model_name="GCN",
+                                                            layer_name="GCN",
+                                                            dataset=dataset_enriched, 
                                                             c_hidden=16, 
                                                             num_layers=2,
                                                             dp_rate=0.1)
@@ -786,9 +790,9 @@ if __name__ == '__main__':
                         help='the number of splits to repeat the results on')
     parser.add_argument('--label_rate', type=float, default=0.5,
                         help='% of training labels to use when --use_labels is set.')
-    parser.add_argument('--planetoid_split', action='store_true',
+    parser.add_argument('--planetoid_split', action='store_false',
                         help='use planetoid splits for Cora/Citeseer/Pubmed')
-    parser.add_argument('--not_lcc', action='store_false',
+    parser.add_argument('--not_lcc', action='store_true',
                         help='use largest connected component')
     parser.add_argument("--global_random_seed", type=int, default=2021,
                             help="Random seed (for reproducibility).")
@@ -796,8 +800,8 @@ if __name__ == '__main__':
                         help="outputh file path to save the result")
     parser.add_argument("--train_ratio", type=float, default=1.,
                         help="the start value of the train ratio (inclusive).")
-    parser.add_argument("--split_policy", type=str, default='fixed',
-                        help="")
+    parser.add_argument('--use_lp', action='store_true',
+                        help='use LPE eigenfunctions')
 
     # Training settings
     parser.add_argument('--feature', type=str, default="full",
@@ -809,9 +813,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=int, default=0,help='which gpu to use if any (default: 0)')
     parser.add_argument('--log_steps', type=int, default=1)
     parser.add_argument('--use_sage', action='store_true')
-    parser.add_argument('--num_layers', type=int, default=3)
-    parser.add_argument('--hidden_channels', type=int, default=256)
-    parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--num_layers', type=int, default=2)
+    parser.add_argument('--hidden_channels', type=int, default=16)
+    parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train (default: 100)')
     parser.add_argument('--runs', type=int, default=10)

@@ -621,18 +621,18 @@ def main():
     loader = DataLoader(datal, batch_size=32)
 
 
-    #     # Standard CORA dataset
-    # node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
-    #                                                         device,
-    #                                                         num_eigs,
-    #                                                         CHECKPOINT_PATH,
-    #                                                         model_name="GCN",
-    #                                                         layer_name="GCN",
-    #                                                         dataset=cora_dataset,
-    #                                                         c_hidden=16, 
-    #                                                         num_layers=2,
-    #                                                         dp_rate=0.1)
-    # print_results(node_gnn_result)
+        # Standard CORA dataset
+    node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
+                                                            device,
+                                                            num_eigs,
+                                                            CHECKPOINT_PATH,
+                                                            model_name="GCN",
+                                                            layer_name="GCN",
+                                                            dataset=cora_dataset,
+                                                            c_hidden=16, 
+                                                            num_layers=2,
+                                                            dp_rate=0.1)
+    print_results(node_gnn_result)
 
 
         # Pretransformed with p-LPE

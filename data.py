@@ -17,7 +17,7 @@ from sklearn.model_selection import ShuffleSplit
 # from graph_rewiring import make_symmetric, apply_pos_dist_rewire
 from heterophilic import WebKB, WikipediaNetwork, Actor
 from torch_geometric.utils import to_scipy_sparse_matrix 
-from utils_1 import ROOT_DIR, generate_sparse_adj
+from utils import ROOT_DIR, generate_sparse_adj
 
 DATA_PATH = f'{ROOT_DIR}/data'
 
@@ -101,9 +101,9 @@ def get_dataset(opt: dict, data_dir, use_lcc: bool = False) -> InMemoryDataset:
 
   # Add the sparse tensor represnattion of the Adjancency
   adj = to_scipy_sparse_matrix(dataset.data.edge_index)
-  data.adj_t = generate_sparse_adj(adj)
-  data.adj_t = data.adj_t.to_symmetric()
-  dataset.data = data
+  adj_t = generate_sparse_adj(adj)
+  adj_t = adj_t.to_symmetric()
+  dataset.data.adj_t = adj_t
 
   #todo this currently breaks with heterophilic datasets if you don't pass --geom_gcn_splits
   if (use_lcc or not train_mask_exists) and not opt['geom_gcn_splits']:
@@ -113,6 +113,43 @@ def get_dataset(opt: dict, data_dir, use_lcc: bool = False) -> InMemoryDataset:
       num_development=5000 if ds == "CoauthorCS" else 1500)
 
   return dataset
+
+
+
+
+def update_dataset(dataset, new_features) -> InMemoryDataset:
+  x_new = torch.cat((dataset.data.x, new_features),1)
+  ei = to_undirected(dataset.data.edge_index)
+  data = Data(
+    x=x_new,
+    edge_index=ei,
+    y=dataset.data.y,
+    train_mask=dataset.data.train_mask,
+    test_mask=dataset.data.test_mask,
+    val_mask=dataset.data.val_mask
+  )
+  dataset.data = data
+  train_mask_exists = True
+
+  adj = to_scipy_sparse_matrix(dataset.data.edge_index)
+  adj_t = generate_sparse_adj(adj)
+  adj_t = adj_t.to_symmetric()
+  dataset.data.adj_t = adj_t
+
+  # datal = [Data(xx,cora_dataset[0].edge_index)]
+        
+  # datal[0].train_mask = cora_dataset[0].train_mask
+  # datal[0].val_mask = cora_dataset[0].val_mask
+
+  # datal[0].test_mask = cora_dataset[0].test_mask
+  # datal[0].y  = cora_dataset[0].y
+  try:
+    dataset.data.train_mask
+  except AttributeError:
+    train_mask_exists = False
+
+  return dataset
+
 
 
 def get_component(dataset: InMemoryDataset, start: int = 0) -> set:
