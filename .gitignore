@@ -152,4 +152,5 @@ saved_models/
 
 dataset/
 images/
+images_out/
 *.png

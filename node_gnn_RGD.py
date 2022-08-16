@@ -4,6 +4,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 # from gnn import GNN
+from torch import Tensor
 
 from tqdm import tqdm
 import argparse
@@ -18,6 +19,7 @@ from torch_geometric.utils import to_networkx, to_dense_adj
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torch_geometric.datasets import Planetoid
+from ogb.nodeproppred import Evaluator
 
 import torch_geometric
 import torch_geometric.nn as geom_nn
@@ -34,7 +36,6 @@ import torch.nn as nn
 
 from typing import Any, Optional
 from torch_geometric.data import Data
-from torch_geometric.loader import DataLoader
 
 #import torch_geometric.transforms as T
 # from torch_geometric.nn import GCNConv
@@ -50,8 +51,14 @@ from torch import nn
 from torch.functional import F
 from copy import copy
 import seaborn as sns
+import json
 
 from utils_1 import get_graph_props, make_2d_graph
+from gnn import GCN,SAGE
+from logger import Logger
+from data import get_dataset, set_fixed_train_val_test_split,set_ratio_train_valid_test_split
+from best_params import best_params_dict
+from utils_1 import ROOT_DIR
 
 sns.set_style("whitegrid")
 
@@ -61,6 +68,78 @@ gnn_layer_by_name = {
     "GraphConv": geom_nn.GraphConv,
     "ChebNet": geom_nn.ChebConv
 }
+
+
+
+def get_optimizer(name, parameters, lr, weight_decay=0):
+  if name == 'sgd':
+    return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'rmsprop':
+    return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'adagrad':
+    return torch.optim.Adagrad(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'adam':
+    return torch.optim.Adam(parameters, lr=lr)
+  elif name == 'adamax':
+    return torch.optim.Adamax(parameters, lr=lr, weight_decay=weight_decay)
+  else:
+    raise Exception("Unsupported optimizer: {}".format(name))
+
+
+def mask_to_index(mask: Tensor) -> Tensor:
+    r"""Converts a mask to an index representation.
+
+    Args:
+        mask (Tensor): The mask.
+    """
+    return mask.nonzero(as_tuple=False).view(-1)
+
+def train(model, data, train_idx, optimizer):
+    model.train()
+
+    optimizer.zero_grad()
+    out = model(data.x, data.adj_t)[train_idx]
+    loss = F.nll_loss(out, data.y[train_idx])
+    loss.backward()
+    optimizer.step()
+
+    return loss.item()
+
+
+@torch.no_grad()
+def test(model, data, split_idx, evaluator):
+    model.eval()
+
+    out = model(data.x, data.adj_t)
+    y_pred = out.argmax(dim=-1, keepdim=True)
+    y_true = data.y.unsqueeze(1)
+
+    train_acc = evaluator.eval({
+        'y_true': y_true[split_idx['train']],
+        'y_pred': y_pred[split_idx['train']],
+    })['acc']
+    valid_acc = evaluator.eval({
+        'y_true': y_true[split_idx['valid']],
+        'y_pred': y_pred[split_idx['valid']],
+    })['acc']
+    test_acc = evaluator.eval({
+        'y_true': y_true[split_idx['test']],
+        'y_pred': y_pred[split_idx['test']],
+    })['acc']
+
+    return train_acc, valid_acc, test_acc
+
+
+
+
+def print_model_params(model):
+  print(model)
+  for name, param in model.named_parameters():
+    if param.requires_grad:
+      print(name)
+      print(param.data.shape)
+
+
 
 class GNNModel(nn.Module):
     
@@ -503,29 +582,10 @@ class GCNLayer(nn.Module):
         return node_feats
 
 
-def main():
-    # Training settings
-    parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
-    parser.add_argument('--device', type=int, default=0,
-                        help='which gpu to use if any (default: 0)')
-    parser.add_argument('--p_laplacian', type=int, default=1,
-                        help='the value for p-laplcian (default: 1)')
-    parser.add_argument('--num_eigs', type=int, default=7,
-                        help='number of eigenvectors (default: 5)')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='number of epochs to train (default: 100)')
-    parser.add_argument('--num_workers', type=int, default=0,
-                        help='number of workers (default: 0)')
-    parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
-                        help='dataset name (default: ogbg-molhiv)')
+def main(cmd_opt):
+    opt = cmd_opt
 
-    parser.add_argument('--feature', type=str, default="full",
-                        help='full feature or simple feature')
-    parser.add_argument('--filename', type=str, default="output",
-                        help='filename to output result (default: )')
-    args = parser.parse_args()
-
-    device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Path to the folder where the datasets are/should be downloaded 
     DATASET_PATH = "../data"
@@ -544,21 +604,12 @@ def main():
     cora_adj = to_dense_adj(cora_dataset[0].edge_index)
     cora_adj.squeeze_()
 
-    num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of eigenvectors we calculate
+    num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
 
     A = cora_adj.numpy()
     D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
 
-    # grid_sizes = [(64,24)]
-    # num_eigs = args.num_eigs #gives the dimension of the embedding or: num_eigs - 1 is the number of eigenvectors we calculate
-    # plot_labels = False
-    # add_side_plots = True
-
-    # A = make_2d_graph(grid_sizes[0][0],grid_sizes[0][1], periodic=False) 
-    # print(A.shape)
-    # D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
-    p = args.p_laplacian
+    p = opt['p_laplacian']
     alpha = 0.01
 
     hi = get_orthonromal_eigvec(eigval,eigvec)
@@ -568,7 +619,7 @@ def main():
 
     n= eigval.shape[0]
     K = num_eigs
-    epochs = args.epochs
+    epochs = opt['epochs']
 
     # instantiate model
     W = torch.tensor(A).float().to(device)
@@ -621,6 +672,70 @@ def main():
     loader = DataLoader(datal, batch_size=32)
 
 
+    opt = cmd_opt
+
+    dataset = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    data = dataset[0]
+
+    if args.use_sage:
+            model = SAGE(data.num_features, opt['hidden_channels'],
+                        dataset.num_classes,opt['num_layers'],
+                opt['dropout']).to(device)
+    else:
+            model = GCN(data.num_features, opt['hidden_channels'],
+                dataset.num_classes, opt['num_layers'],
+                opt['dropout']).to(device)
+
+    if not opt['planetoid_split'] and opt['dataset'] in ['Cora','Citeseer','Pubmed']:
+        dataset.data = set_fixed_train_val_test_split(np.random.randint(0, 1000), dataset.data, num_development=5000 if opt["dataset"] == "CoauthorCS" else 1500)
+
+    data = dataset.data.to(device)
+    split_idx = {"train": mask_to_index(data.train_mask),"valid": mask_to_index(data.val_mask ), "test": mask_to_index(data.test_mask)}
+    train_idx = mask_to_index(data.train_mask).to(device)
+
+
+    evaluator = Evaluator(name='ogbn-arxiv')
+    logger = Logger(opt['num_splits'] * opt['runs'], args)
+    # internal_logger = Logger(10, args)
+    logger_report = Logger(opt['num_splits'], args)
+    logger_test = Logger(opt['num_splits'] * opt['runs'], args)
+
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    print(sum(p.numel() for p in model.parameters()))
+    print_model_params(model)
+    optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
+    best_time = best_epoch = train_acc = val_acc = test_acc = 0
+
+    for run in range(args.runs):
+        model.reset_parameters()
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        for epoch in range(1, 1 + args.epochs):
+            loss = train(model, data, train_idx, optimizer)
+            result = test(model, data, split_idx, evaluator)
+            logger.add_result(run, result)
+
+            if epoch % args.log_steps == 0:
+                train_acc, valid_acc, test_acc = result
+                # print(f'Run: {run + 1:02d}, '
+                #       f'Epoch: {epoch:02d}, '
+                #       f'Loss: {loss:.4f}, '
+                #       f'Train: {100 * train_acc:.2f}%, '
+                #       f'Valid: {100 * valid_acc:.2f}% '
+                #       f'Test: {100 * test_acc:.2f}%')
+        logger.print_statistics(run)
+    train_final, valid_final, test_final = logger.print_statistics()
+
+    result = {"Dataset": opt['dataset'], "train_ratio": int(opt['train_ratio']),
+                "Average Train": train_final, " Average Valid": valid_final, " Average Test": test_final}
+    result_file = open(args.outputpath, "a+", encoding='utf-8')
+    result_file.write(json.dumps(result) + '\n')
+    result_file.close()
+
+
+
+
     #     # Standard CORA dataset
     # node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
     #                                                         device,
@@ -652,5 +767,89 @@ def main():
 
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--use_cora_defaults', action='store_true',
+                        help='Whether to run with best params for cora. Overrides the choice of dataset')
+    # data args
+    parser.add_argument('--dataset', type=str, default='Cora',
+                        help='Cora, Citeseer, Pubmed, Computers, Photo, CoauthorCS, ogbn-arxiv')
+    parser.add_argument('--data_norm', type=str, default='rw',
+                        help='rw for random walk, gcn for symmetric gcn norm')
+    parser.add_argument('--self_loop_weight', type=float, default=1.0, help='Weight of self-loops.')
+    parser.add_argument('--use_labels', dest='use_labels', action='store_true', help='Also diffuse labels')
+    parser.add_argument('--geom_gcn_splits', dest='geom_gcn_splits', action='store_true',
+                        help='use the 10 fixed splits from '
+                            'https://arxiv.org/abs/2002.05287')
+    parser.add_argument('--num_splits', type=int, dest='num_splits', default=1,
+                        help='the number of splits to repeat the results on')
+    parser.add_argument('--label_rate', type=float, default=0.5,
+                        help='% of training labels to use when --use_labels is set.')
+    parser.add_argument('--planetoid_split', action='store_true',
+                        help='use planetoid splits for Cora/Citeseer/Pubmed')
+    parser.add_argument('--not_lcc', action='store_false',
+                        help='use largest connected component')
+    parser.add_argument("--global_random_seed", type=int, default=2021,
+                            help="Random seed (for reproducibility).")
+    parser.add_argument("--outputpath", type=str, default="empty.json",
+                        help="outputh file path to save the result")
+    parser.add_argument("--train_ratio", type=float, default=1.,
+                        help="the start value of the train ratio (inclusive).")
+    parser.add_argument("--split_policy", type=str, default='fixed',
+                        help="")
+
+    # Training settings
+    parser.add_argument('--feature', type=str, default="full",
+                        help='full feature or simple feature')
+    parser.add_argument('--filename', type=str, default="output",
+                        help='filename to output result (default: )')
+
+    # GNN args
+    parser.add_argument('--device', type=int, default=0,help='which gpu to use if any (default: 0)')
+    parser.add_argument('--log_steps', type=int, default=1)
+    parser.add_argument('--use_sage', action='store_true')
+    parser.add_argument('--num_layers', type=int, default=3)
+    parser.add_argument('--hidden_channels', type=int, default=256)
+    parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train (default: 100)')
+    parser.add_argument('--runs', type=int, default=10)
+    parser.add_argument('--p_laplacian', type=int, default=1,
+                        help='the value for p-laplcian (default: 1)')
+    parser.add_argument('--num_eigs', type=int, default=7,
+                        help='number of eigenvectors (default: 5)')
+    parser.add_argument('--optimizer', type=str, default='adam', help='One from sgd, rmsprop, adam, adagrad, adamax.')
+    parser.add_argument('--decay', type=float, default=5e-4, help='Weight decay for optimization')
+    # parser.add_argument("--splits", type=int, default=5,
+    #                     help="The number of re-shuffling & splitting for each train ratio.")
+
+
+    # parser.add_argument('--hidden_dim', type=int, default=16, help='Hidden dimension.')
+    # parser.add_argument('--fc_out', dest='fc_out', action='store_true',
+    #                     help='Add a fully connected layer to the decoder.')
+    # parser.add_argument('--input_dropout', type=float, default=0.5, help='Input dropout rate.')
+    # parser.add_argument('--dropout', type=float, default=0.0, help='Dropout rate.')
+    # parser.add_argument("--batch_norm", dest='batch_norm', action='store_true', help='search over reg params')
+    # parser.add_argument('--lr', type=float, default=0.01, help='Learning rate.')
+    # parser.add_argument('--epoch', type=int, default=100, help='Number of training epochs per iteration.')
+    # parser.add_argument('--alpha', type=float, default=1.0, help='Factor in front matrix A.')
+    # parser.add_argument('--alpha_dim', type=str, default='sc', help='choose either scalar (sc) or vector (vc) alpha')
+    # parser.add_argument('--no_alpha_sigmoid', dest='no_alpha_sigmoid', action='store_true',
+    #                     help='apply sigmoid before multiplying by alpha')
+    # parser.add_argument('--beta_dim', type=str, default='sc', help='choose either scalar (sc) or vector (vc) beta')
+    # parser.add_argument('--block', type=str, default='constant', help='constant, mixed, attention, hard_attention')
+    # parser.add_argument('--function', type=str, default='laplacian', help='laplacian, transformer, dorsey, GAT')
+    # parser.add_argument('--use_mlp', dest='use_mlp', action='store_true',
+    #                     help='Add a fully connected layer to the encoder.')
+    # parser.add_argument('--add_source', dest='add_source', action='store_true',
+    #                     help='If try get rid of alpha param and the beta*x0 source term')
+    # parser.add_argument('--cgnn', dest='cgnn', action='store_true', help='Run the baseline CGNN model from ICML20')
+
+
+    args = parser.parse_args()
+
+    opt = vars(args)
+
+    main(opt)
+
