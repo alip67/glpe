@@ -155,3 +155,4 @@ images/
 images_out/
 *.png
 data/
+experiments/
