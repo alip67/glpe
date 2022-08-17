@@ -740,7 +740,7 @@ def main(cmd_opt):
 
 
 
-        # Standard CORA dataset
+        # Standard dataset
     node_gnn_model, node_gnn_result = train_node_classifier_1(device,
                                                             num_eigs,
                                                             CHECKPOINT_PATH,
