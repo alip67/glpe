@@ -1,6 +1,5 @@
 import os.path as osp
 import torch
-# from torch_geometric.loader import DataLoader
 import torch.optim as optim
 import torch.nn.functional as F
 # from gnn import GNN
@@ -9,8 +8,9 @@ from tqdm import tqdm
 import argparse
 import time
 import numpy as np
-# import geotorch
+import random
 import geoopt
+from timeit import default_timer as timer
 
 ### importing OGB
 # from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
@@ -18,27 +18,22 @@ from torch_geometric.utils import to_networkx, to_dense_adj
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torch_geometric.datasets import Planetoid
+from torch_geometric.nn import GINConv
 
 import torch_geometric
 import torch_geometric.nn as geom_nn
 import torch_geometric.data as geom_data
 from torch_geometric.loader import DataLoader
-
-import torch
-import argparse
-from timeit import default_timer as timer
-import torch
-import torch.nn.functional as F
 import torch.nn as nn
-# from numba import jit
-
 from typing import Any, Optional
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
+from torch.nn import Linear
+from torch_geometric.nn import GCNConv
+from torch_geometric.nn import global_mean_pool
 
 ## Imports for plotting
-import matplotlib.pyplot as plt
-%matplotlib inline 
+import matplotlib.pyplot as plt 
 from IPython.display import set_matplotlib_formats
 set_matplotlib_formats('svg', 'pdf') # For export
 from matplotlib.colors import to_rgb
@@ -47,6 +42,20 @@ matplotlib.rcParams['lines.linewidth'] = 2.0
 import seaborn as sns
 sns.reset_orig()
 sns.set()
+
+## Progress bar
+from tqdm.notebook import tqdm
+
+## PyTorch
+import torch
+import torch.nn as nn
+import torch.utils.data as data
+import torch.optim as optim
+# Torchvision
+import torchvision
+from torchvision.datasets import CIFAR10
+from torchvision import transforms
+# PyTorch Lightning
 
 import numpy as np
 import networkx as nx
@@ -121,6 +130,75 @@ class GNNModel(nn.Module):
                 x = l(x)
         return x
 
+
+def train(model,optimizer,criterion,data_loader,BATCH_SIZE):
+    model.train()
+    losss = 0
+    for data in data_loader:  # Iterate in batches over the training dataset.
+         out = model(data.x, data.edge_index, data.batch)  # Perform a single forward pass.
+         loss = criterion(out, data.y)  # Compute the loss.
+         loss.backward()  # Derive gradients.
+         optimizer.step()  # Update parameters based on gradients.
+         optimizer.zero_grad()  # Clear gradients.
+         losss = losss + loss 
+    return losss*BATCH_SIZE/150
+
+def test(model, data_loader):
+     model.eval()
+
+     correct = 0
+     for data in data_loader:  # Iterate in batches over the training/test dataset.
+         out = model(data.x, data.edge_index, data.batch)  
+         pred = out.argmax(dim=1)  # Use the class with highest probability.
+         correct += int((pred == data.y).sum())  # Check against ground-truth labels.
+     return correct / len(data_loader.dataset)  # Derive ratio of correct predictions.
+
+class MLP(nn.Module):
+    def __init__(self, layer_dims, batch_norm=True, relu=True):
+        super().__init__()
+        self.layer_dims = layer_dims
+        layers = []
+        for i in range(len(layer_dims) - 1):
+            in_dim, out_dim = layer_dims[i], layer_dims[i+1]
+            layers.append(nn.Linear(in_dim, out_dim))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(out_dim))
+            if relu:
+                layers.append(nn.ReLU()) 
+        self.layer = nn.Sequential(*layers)  
+    
+    def reset_parameters(self):
+        #reset(self.layer)
+        pass
+
+    def forward(self, x):
+        return self.layer(x)
+
+class GCN(torch.nn.Module):
+    def __init__(self, num_eigs,nclasses,hidden_channels):
+        super(GCN, self).__init__()
+        torch.manual_seed(12345)
+        self.conv1 = GINConv(nn=MLP([5+num_eigs-1,64]))
+        self.conv2 = GINConv(nn=MLP([64,64]))
+        self.conv3 = GINConv(nn=MLP([64,64]))
+        self.lin = Linear(hidden_channels, nclasses)
+
+    def forward(self, x, edge_index, batch):
+        # 1. Obtain node embeddings 
+        x = self.conv1(x, edge_index)
+        x = x.relu()
+        x = self.conv2(x, edge_index)
+        x = x.relu()
+        x = self.conv3(x, edge_index)
+
+        # 2. Readout layer
+        x = global_mean_pool(x, batch)  # [batch_size, hidden_channels]
+
+        # 3. Apply a final classifier
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin(x)
+        
+        return x
 
 class NodeLevelGNN(pl.LightningModule):
     
@@ -536,7 +614,8 @@ def main():
                         help='filename to output result (default: )')
     args = parser.parse_args()
 
-    device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+    # device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # Path to the folder where the datasets are/should be downloaded 
     DATASET_PATH = "../data"
@@ -574,62 +653,100 @@ def main():
     print(f'Has self-loops: {data.has_self_loops()}')
     print(f'Is undirected: {data.is_undirected()}')
 
-    cora_adj = to_dense_adj(cora_dataset[0].edge_index)
-    cora_adj.squeeze_()
-
     num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of eigenvectors we calculate
-
-    A = cora_adj.numpy()
-    D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
-    # grid_sizes = [(64,24)]
-    # num_eigs = args.num_eigs #gives the dimension of the embedding or: num_eigs - 1 is the number of eigenvectors we calculate
-    # plot_labels = False
-    # add_side_plots = True
-
-    # A = make_2d_graph(grid_sizes[0][0],grid_sizes[0][1], periodic=False) 
-    # print(A.shape)
-    # D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
     p = args.p_laplacian
-    alpha = 0.01
 
-    hi = get_orthonromal_eigvec(eigval,eigvec)
+    datal = []
+    for data in dataset:
+        #Preprocessing
+
+        cora_adj = to_dense_adj(data.edge_index)
+        cora_adj.squeeze_()
+
+        A = cora_adj.numpy()
+        D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
+
+        #We transform our eigenvectors into an orthonormalbasis such that it is in the Stiefel manifold
+
+        hi = get_orthonromal_eigvec(eigval,eigvec)
+
+        n= eigval.shape[0]
+        K = num_eigs
+        epochs = args.epochs
+
+        # instantiate model
+        W = torch.tensor(A).float().to(device)
+        F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
+        m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device) #I think we should not use F_ at initizialization, rather as a forward input so that we can start different init, or just use the reset parameters differently
+
+        # Instantiate optimizer
+        opt = torch.optim.SGD(m.parameters(), lr=0.01)
+        #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+        optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2)
+        #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+
+        decayRate = 0.99
+        my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=opt)#, gamma=decayRate)
+
+        scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+
+        #Learn the 1-eigenvector. It is then given by m.weight
+        start = timer()
+        losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  
+        end = timer()
+        print(end - start, " Second")
+
+        m.to('cpu')
+        xx = torch.cat((data.x, m.weight[:,1:3]),1)
+
+        #xx = torch.cat((data.x, torch.tensor(eigvec[:,:7])),1)
+
+        #Didnt know how to pretransform the features of CORA; This is my workaround
+        datal.append(Data(xx,data.edge_index, y=data.y, edge_attr=data.edge_attr, batch = data.batch))
 
 
-    W = torch.tensor(A)
+    random.seed(42)
+    #torch.manual_seed(12345)
+    #dataset = dataset.shuffle()
+    random.shuffle(datal)
 
-    n= eigval.shape[0]
-    K = num_eigs
-    epochs = args.epochs
+    train_dataset = datal[:150]
+    val_dataset = datal[150:169]
+    test_dataset = datal[169:]
 
-    # instantiate model
-    W = torch.tensor(A).float().to(device)
-    F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
-    m = Model_RGD(F_, 1, n, K, ball = geoopt.CanonicalStiefel()).to(device) #I think we should not use F_ at initizialization, rather as a forward input so that we can start different init, or just use the reset parameters differently
 
-    # Instantiate optimizer
-    opt = torch.optim.SGD(m.parameters(), lr=0.01)
-    #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-2)
-    #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+    print(f'Number of training graphs: {len(train_dataset)}')
+    print(f'Number of test graphs: {len(test_dataset)}')
 
-    decayRate = 0.99
-    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=opt)#, gamma=decayRate)
+    BATCH_SIZE = 8
 
-    scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False)
+    val_loader= DataLoader(val_dataset, batch_size=8, shuffle=False)
 
-    start = timer()
-    #for i in range(0,10):
-    #  losses = training_loop1(m, opt,scheduler)
-    #end = timer()
-    losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs) 
-    end = timer()
-    print(end - start, " second")
-    
+    model = GCN(num_eigs,dataset.num_classes,hidden_channels=64)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    criterion = torch.nn.CrossEntropyLoss()
 
-    loss = [x.to('cpu').detach().numpy() for x in losses]
-    x = np.arange(0,epochs)
+    ll=[]
+    best_val = 0
+    best_ep = []
+    epochs= 200
+    for epoch in range(1, epochs):
+        losses = train(model,optimizer,criterion,train_loader,BATCH_SIZE)
+        ll.append(losses) 
+        train_acc = test(model,train_loader)
+        test_acc = test(model,test_loader)
+        val_acc = test(model,val_loader)
+        print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}, Val Acc: {val_acc:.4f}')
+        if val_acc >= best_val:
+            best_val = val_acc
+            best_ep = f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}, Val Acc: {val_acc:.4f}'
+
+
+
+    loss = [x.to('cpu').detach().numpy() for x in ll]
+    x = np.arange(1,epochs)
     y = np.array(loss)
     
     # Plotting the Graph
@@ -637,49 +754,9 @@ def main():
     plt.title("Curve plotted using the given points")
     plt.xlabel("X")
     plt.ylabel("Y")
+    plt.savefig("hi.png")
     plt.show()
-    plt.savefig('loss.png')
-
-    m.to('cpu')
-    xx = torch.cat((cora_dataset[0].x, m.weight),1)
-
-    datal = [Data(xx,cora_dataset[0].edge_index)]
-
-    datal[0].train_mask = cora_dataset[0].train_mask
-    datal[0].val_mask = cora_dataset[0].val_mask
-
-    datal[0].test_mask = cora_dataset[0].test_mask
-    datal[0].y  = cora_dataset[0].y
-
-    loader = DataLoader(datal, batch_size=32)
-
-
-        # Standard CORA dataset
-    node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
-                                                            device,
-                                                            num_eigs,
-                                                            CHECKPOINT_PATH,
-                                                            model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset=cora_dataset,
-                                                            c_hidden=16, 
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
-    print_results(node_gnn_result)
-
-
-        # Pretransformed with p-LPE
-    node_gnn_model, node_gnn_result = train_node_classifier_1(cora_dataset,
-                                                            device,
-                                                            num_eigs,
-                                                            CHECKPOINT_PATH,
-                                                            model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset=datal, 
-                                                            c_hidden=16, 
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
-    print_results(node_gnn_result)
+    print(best_ep)
 
 
 
