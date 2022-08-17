@@ -6,10 +6,10 @@ from models.base_model import BaseModel
 
 
 class ModelWrapper(object):
-    def __init__(self, config, data):
+    def __init__(self, config, data,device):
         self.config = config
         self.data = data
-        self.model = BaseModel(config).cuda()
+        self.model = BaseModel(config).to(device)
 
     # save function that saves the checkpoint in the path defined in the config file
     def save(self, best: bool, epoch: int, optimizer: torch.optim.Optimizer):

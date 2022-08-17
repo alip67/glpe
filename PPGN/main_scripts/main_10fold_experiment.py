@@ -4,6 +4,45 @@ import torch
 import numpy as np
 from datetime import datetime
 
+import os.path as osp
+import torch
+# from torch_geometric.loader import DataLoader
+import torch.optim as optim
+import torch.nn.functional as F
+# from gnn import GNN
+from torch import Tensor
+
+from tqdm import tqdm
+import argparse
+import time
+import numpy as np
+# import geotorch
+import geoopt
+
+### importing OGB
+# from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
+from torch_geometric.utils import to_networkx, to_dense_adj
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from torch_geometric.datasets import Planetoid
+from ogb.nodeproppred import Evaluator
+
+import torch_geometric
+import torch_geometric.nn as geom_nn
+import torch_geometric.data as geom_data
+from torch_geometric.loader import DataLoader
+
+import torch
+import argparse
+from timeit import default_timer as timer
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
+# from numba import jit
+
+from typing import Any, Optional
+from torch_geometric.data import Data
+
 """
 How To:
 Example for running from command line:
@@ -26,8 +65,14 @@ from utils.utils import get_args
 def main():
     # capture the config path from the run arguments
     # then process the json configuration file
+    parser = argparse.ArgumentParser(description='PGNN')
+    parser.add_argument('--dataset_name', type=str, default='MUTAG',
+                        help='dataset name (default: ogbg-molhiv)')
+    parser.add_argument('--config', type=str, default="configs/10fold_config.json",
+                        help='filename to config path')
+    args = parser.parse_args()
     try:
-        args = get_args()
+        # args = get_args()
         config = process_config(args.config, args.dataset_name)
 
     except Exception as e:
@@ -36,6 +81,7 @@ def main():
 
     # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"  # TODO uncomment only for CUDA error debugging
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     torch.manual_seed(100)
     np.random.seed(100)
@@ -53,11 +99,11 @@ def main():
             print("Experiment num = {0}\nFold num = {1}".format(exp, fold))
             # create your data generator
             config.num_fold = fold
-            data = DataGenerator(config)
+            data = DataGenerator(config,device)
             # create an instance of the model you want
-            model_wrapper = ModelWrapper(config, data)
+            model_wrapper = ModelWrapper(config, data,device)
             # create trainer and pass all the previous components to it
-            trainer = Trainer(model_wrapper, data, config)
+            trainer = Trainer(model_wrapper, data, config,device)
             # here you train your model
             trainer.train()
 

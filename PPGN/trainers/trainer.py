@@ -7,12 +7,12 @@ from utils import doc_utils
 
 
 class Trainer(object):
-    def __init__(self, model_wrapper, data, config):
+    def __init__(self, model_wrapper, data, config,device):
         self.is_QM9 = config.dataset_name == 'QM9'
         self.best_val_loss = np.inf
         self.best_epoch = -1
         self.cur_epoch = 0
-        self.device = 'cuda'
+        self.device = device
 
         self.model_wrapper = model_wrapper
         self.config = config

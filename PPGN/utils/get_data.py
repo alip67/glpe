@@ -49,7 +49,7 @@ def download_QM9():
 def main():
     os.makedirs(raw_dir, exist_ok=True)
     download_benchmarks()
-    download_QM9()
+    # download_QM9()
 
 
 if __name__ == '__main__':

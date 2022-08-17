@@ -4,12 +4,13 @@ import torch
 
 
 class DataGenerator:
-    def __init__(self, config):
+    def __init__(self, config,device):
         self.config = config
         # load data here
         self.batch_size = self.config.hyperparams.batch_size
         self.is_qm9 = self.config.dataset_name == 'QM9'
         self.labels_dtype = torch.float32 if self.is_qm9 else torch.long
+        self.device = device
 
         self.load_data()
 
@@ -65,7 +66,7 @@ class DataGenerator:
 
     def next_batch(self):
         graphs, labels = next(self.iter)
-        graphs, labels = torch.cuda.FloatTensor(graphs), torch.tensor(labels, device='cuda', dtype=self.labels_dtype)
+        graphs, labels = torch.cuda.FloatTensor(graphs), torch.tensor(labels, dtype=self.labels_dtype).to(self.device)
         return graphs, labels
 
     # initialize an iterator from the data for one training epoch
