@@ -252,19 +252,6 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
                          callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
                          gpus=1 if str(device).startswith("cuda") else 0,
                          max_epochs=200)
-                         #progress_bar_refresh_rate=0) # 0 because epoch size is 1
-    #trainer.logger._default_hp_metric = None # Optional logging argument that we don't need
-
-    # Check whether pretrained model exists. If yes, load it and skip training
-    #pretrained_filename = os.path.join(CHECKPOINT_PATH, f"NodeLevel{model_name}.ckpt")
-    #if os.path.isfile(pretrained_filename):
-    #    print("Found pretrained model, loading...")
-    #    model = NodeLevelGNN.load_from_checkpoint(pretrained_filename)
-    #else:
-    #    pl.seed_everything()
-    #    model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
-    #    trainer.fit(model, node_data_loader, node_data_loader)
-    #    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
     
     pl.seed_everything()
     if dataset == cora_dataset:
@@ -298,19 +285,6 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
                          callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
                          gpus=1 if str(device).startswith("cuda") else 0,
                          max_epochs=200)
-                         #progress_bar_refresh_rate=0) # 0 because epoch size is 1
-    #trainer.logger._default_hp_metric = None # Optional logging argument that we don't need
-
-    # Check whether pretrained model exists. If yes, load it and skip training
-    #pretrained_filename = os.path.join(CHECKPOINT_PATH, f"NodeLevel{model_name}.ckpt")
-    #if os.path.isfile(pretrained_filename):
-    #    print("Found pretrained model, loading...")
-    #    model = NodeLevelGNN.load_from_checkpoint(pretrained_filename)
-    #else:
-    #    pl.seed_everything()
-    #    model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
-    #    trainer.fit(model, node_data_loader, node_data_loader)
-    #    model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
     
     pl.seed_everything()
     if dataset_type == "original":
