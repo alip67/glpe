@@ -62,6 +62,10 @@ from utils import ROOT_DIR
 
 sns.set_style("whitegrid")
 
+import wandb
+from pytorch_lightning.loggers import WandbLogger
+
+
 gnn_layer_by_name = {
     "GCN": geom_nn.GCNConv,
     "GAT": geom_nn.GATConv,
@@ -232,6 +236,12 @@ class NodeLevelGNN(pl.LightningModule):
         self.log('train_acc', acc)
         return loss
 
+    def test_epoch_end(self, test_step_outputs):  # args are defined as part of pl API
+        dummy_input = torch.zeros(self.hparams["in_dims"], device=self.device)
+        model_filename = "model_final.onnx"
+        self.to_onnx(model_filename, dummy_input, export_params=True)
+        wandb.save(model_filename)
+
     def validation_step(self, batch, batch_idx):
         _, acc = self.forward(batch, mode="val")
         self.log('val_acc', acc)
@@ -284,6 +294,7 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
     trainer = pl.Trainer(default_root_dir=root_dir,
                          callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
                          gpus=1 if str(device).startswith("cuda") else 0,
+                         logger = WandbLogger(), 
                          max_epochs=200)
     
     pl.seed_everything()
@@ -751,7 +762,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_cora_defaults', action='store_true',
                         help='Whether to run with best params for cora. Overrides the choice of dataset')
     # data args
-    parser.add_argument('--dataset', type=str, default='texas',
+    parser.add_argument('--dataset', type=str, default='Cora',
                         help='Cora, Citeseer, Pubmed, Computers, Photo, CoauthorCS, ogbn-arxiv')
     parser.add_argument('--data_norm', type=str, default='rw',
                         help='rw for random walk, gcn for symmetric gcn norm')
