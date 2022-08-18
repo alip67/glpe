@@ -15,7 +15,7 @@ import torch_geometric.transforms as T
 from torch_geometric.utils import to_undirected
 from sklearn.model_selection import ShuffleSplit
 # from graph_rewiring import make_symmetric, apply_pos_dist_rewire
-from heterophilic import WebKB, WikipediaNetwork, Actor
+from heterophilic import WebKB, WikipediaNetwork, Actor, generate_random_splits,get_fixed_splits
 from torch_geometric.utils import to_scipy_sparse_matrix 
 from utils import ROOT_DIR, generate_sparse_adj
 
@@ -105,12 +105,17 @@ def get_dataset(opt: dict, data_dir, use_lcc: bool = False) -> InMemoryDataset:
   adj_t = adj_t.to_symmetric()
   dataset.data.adj_t = adj_t
 
+
+
   #todo this currently breaks with heterophilic datasets if you don't pass --geom_gcn_splits
-  if (use_lcc or not train_mask_exists) and not opt['geom_gcn_splits']:
-    dataset.data = set_fixed_train_val_test_split(
-      12345,
-      dataset.data,
-      num_development=5000 if ds == "CoauthorCS" else 1500)
+  if ds in ['cornell', 'texas', 'wisconsin','chameleon', 'squirrel','film'] and not opt['geom_gcn_splits']:
+    dataset.data = get_fixed_splits(dataset.data, ds,seed = 0)
+  else:
+      if (use_lcc or not train_mask_exists) and not opt['geom_gcn_splits']:
+        dataset.data = set_fixed_train_val_test_split(
+          12345,
+          dataset.data,
+          num_development=5000 if ds == "CoauthorCS" else 1500) 
 
   return dataset
 
