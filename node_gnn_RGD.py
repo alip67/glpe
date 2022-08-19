@@ -237,6 +237,7 @@ class NodeLevelGNN(pl.LightningModule):
         self.log('train_acc', acc)
         return loss
 
+<<<<<<< HEAD
     """
     def test_epoch_end(self, test_step_outputs):  # args are defined as part of pl API
         dummy_input = torch.zeros(self.hparams["in_dims"], device=self.device)
@@ -254,6 +255,13 @@ class NodeLevelGNN(pl.LightningModule):
                 final_value += test_step_out
 
         self.log("final_metric", final_value)
+=======
+    # def test_epoch_end(self, test_step_outputs):  # args are defined as part of pl API
+    #     dummy_input = torch.zeros(self.hparams["c_in"], device=self.device)
+    #     model_filename = "model_final.onnx"
+    #     self.to_onnx(model_filename, dummy_input, export_params=True)
+    #     wandb.save(model_filename)
+>>>>>>> b73e9a33de4aa8cc1a4201b9865b887093e7b4e0
 
     def validation_step(self, batch, batch_idx):
         _, acc = self.forward(batch, mode="val")
@@ -312,12 +320,17 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
                          gpus=1 if str(device).startswith("cuda") else 0,
                          logger = WandbLogger(), 
                          max_epochs=200)
+
     
     pl.seed_everything()
+<<<<<<< HEAD
     if dataset_type == "original":
       model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     else:
       model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+=======
+    model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+>>>>>>> b73e9a33de4aa8cc1a4201b9865b887093e7b4e0
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
@@ -699,7 +712,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_cora_defaults', action='store_true',
                         help='Whether to run with best params for cora. Overrides the choice of dataset')
     # data args
-    parser.add_argument('--dataset', type=str, default='Cora',
+    parser.add_argument('--dataset', type=str, default='texas',
                         help='Cora, Citeseer, Pubmed, Computers, Photo, CoauthorCS, ogbn-arxiv')
     parser.add_argument('--data_norm', type=str, default='rw',
                         help='rw for random walk, gcn for symmetric gcn norm')
