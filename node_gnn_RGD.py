@@ -208,6 +208,7 @@ class NodeLevelGNN(pl.LightningModule):
         self.loss_module = nn.CrossEntropyLoss()
 
     def forward(self, data, mode="train"):
+        print(data)
         x, edge_index = data.x, data.edge_index
         x = self.model(x, edge_index)
         
@@ -236,11 +237,23 @@ class NodeLevelGNN(pl.LightningModule):
         self.log('train_acc', acc)
         return loss
 
+    """
     def test_epoch_end(self, test_step_outputs):  # args are defined as part of pl API
         dummy_input = torch.zeros(self.hparams["in_dims"], device=self.device)
         model_filename = "model_final.onnx"
         self.to_onnx(model_filename, dummy_input, export_params=True)
         wandb.save(model_filename)
+    """
+
+    def test_epoch_end(self, outputs):
+        print(outputs)
+        final_value = 0
+        for dataloader_outputs in outputs:
+            for test_step_out in dataloader_outputs:
+                # do something
+                final_value += test_step_out
+
+        self.log("final_metric", final_value)
 
     def validation_step(self, batch, batch_idx):
         _, acc = self.forward(batch, mode="val")
@@ -273,14 +286,17 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
 
 
     # Test best model on the test set
-    test_result = trainer.test(model, node_data_loader, verbose=False)
+    #test_result = trainer.test(model, node_data_loader, verbose=False)
     batch = next(iter(node_data_loader))
     batch = batch.to(model.device)
     _, train_acc = model.forward(batch, mode="train")
     _, val_acc = model.forward(batch, mode="val")
+    _, test_acc = model.forward(batch, mode='test')
     result = {"train": train_acc,
               "val": val_acc,
-              "test": test_result[0]['test_acc']}
+              "test": test_acc
+              }
+              #"test": test_result[0]['test_acc']}
     return model, result
 
 
@@ -301,7 +317,7 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
     if dataset_type == "original":
       model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     else:
-      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features , c_out=dataset.num_classes, **model_kwargs)
+      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
@@ -312,6 +328,7 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
     batch = batch.to(model.device)
     _, train_acc = model.forward(batch, mode="train")
     _, val_acc = model.forward(batch, mode="val")
+    _, test_acc = model.forward(batch, mode='test')
     result = {"train": train_acc,
               "val": val_acc,
               "test": test_result[0]['test_acc']}
@@ -477,47 +494,25 @@ class Model_RGD(nn.Module):
         self.weight = geoopt.ManifoldParameter(
             torch.empty(n, K), manifold=self.ball
         )
-        #self.points = nn.Parameter(self.initeigv.clone())
-        #geotorch.grassmannian(self, "weight") 
-        #Stiefel = self.parametrizations.weight[0]
-        #self.weight = Stiefel.sample()
-        #self.linear = nn.Linear(n, K)
-        #self.linear.weight = nn.Parameter(D) 
-        #geotorch.orthogonal(self.linear, "weight")     
-        #self.linear.weight =  D.transpose(1,0)
-        #self.linear.weight =  torch.eye(K,n)
-        #geotorch.orthogonal(self.weights)
-        #geotorch.Stiefel(self.linear, "weight") 
-        #geotorch.Stiefel(self.weights)
+
         self.reset_parameters()
 
     def reset_parameters(self):
-        # Every manifold has a convenience sample method, but you can use your own initializer
-        #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
-        #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
         self.weight = nn.Parameter(self.initeigv.clone())
         pass
 
     def forward(self, X):
-        """Implement function to be optimised. In this case, an exponential decay
-        function (a + exp(-k * X) + b),
-        """
-        #p=2
         f = self.weight
         FF = f.repeat(1,self.n)
         FF = FF.reshape(self.n,self.n,self.K)
-        #FFF = torch.sum(torch.pow(torch.abs(f), 1/p))
         FFF = torch.norm(self.weight, self.p,dim=0)
         FFF = torch.pow(FFF,self.p)
         FF = FF.transpose(2,0)
         GG =FF.transpose(1,2)
         A = X.unsqueeze(dim=1)
-        #WW = A.unsqueeze(dim=-1)
-        #Ww = WW.expand(-1,-1,-1,3)
-        KK = FF - GG #this must be changed, since the values must be taken in norm and so on
+        KK = FF - GG
         KKK = KK.unsqueeze(dim=-1)
         KKK = torch.pow(torch.abs(KKK),self.p)
-        #print(A.size(), KKK.size())
         KKK = KKK.type(torch.float64)
         A = A.type(torch.float64)
         LL = torch.matmul(A, KKK)
@@ -536,12 +531,10 @@ def training_loop1(model, optimizer, sched,W, epochs=100):
     for i in range(epochs):
         preds = model(W)
         loss = preds
-        #print(loss)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        #sched.step(loss)
-        losses.append(loss)  
+        losses.append(loss)
     return losses
 
 
@@ -637,16 +630,20 @@ def main(cmd_opt):
     y = np.array(loss)
     
     # Plotting the Graph
+    m.to('cpu')
+
+    """
     plt.plot(x, y)
-    plt.title("Curve plotted using the given points")
-    plt.xlabel("X")
-    plt.ylabel("Y")
+    plt.title("Loss per epoch in optimization for p-eigenvectors")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
     plt.show()
     plt.savefig('loss.png')
 
     # cora_dataset = torch_geometric.datasets.Planetoid(root=DATASET_PATH, name="Cora")
 
     m.to('cpu')
+    """
     # xx = torch.cat((cora_dataset[0].x, m.weight),1)
 
     # datal = [Data(xx,cora_dataset[0].edge_index)]
@@ -660,69 +657,10 @@ def main(cmd_opt):
     # loader = DataLoader(datal, batch_size=32)
 
     if args.use_lp:
-        dataset = update_dataset(dataset_org, m.weight.data)
+        dataset = update_dataset(dataset_org, m.weight)
     opt = cmd_opt
     dataset = dataset_org.copy()
-    dataset_enriched = update_dataset(dataset_org, m.weight.data)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # data = dataset[0]
-
-    # if args.use_sage:
-    #         model = SAGE(data.num_features, opt['hidden_channels'],
-    #                     dataset.num_classes,opt['num_layers'],
-    #             opt['dropout']).to(device)
-    # else:
-    #         model = GCN(data.num_features, opt['hidden_channels'],
-    #             dataset.num_classes, opt['num_layers'],
-    #             opt['dropout']).to(device)
-
-    # if not opt['planetoid_split'] and opt['dataset'] in ['Cora','Citeseer','Pubmed']:
-    #     dataset.data = set_fixed_train_val_test_split(np.random.randint(0, 1000), dataset.data, num_development=5000 if opt["dataset"] == "CoauthorCS" else 1500)
-
-    # data = dataset.data.to(device)
-    # split_idx = {"train": mask_to_index(data.train_mask),"valid": mask_to_index(data.val_mask ), "test": mask_to_index(data.test_mask)}
-    # train_idx = mask_to_index(data.train_mask).to(device)
-
-
-    # evaluator = Evaluator(name='ogbn-arxiv')
-    # logger = Logger(opt['num_splits'] * opt['runs'], args)
-    # # internal_logger = Logger(10, args)
-    # logger_report = Logger(opt['num_splits'], args)
-    # logger_test = Logger(opt['num_splits'] * opt['runs'], args)
-
-    # parameters = [p for p in model.parameters() if p.requires_grad]
-    # print(sum(p.numel() for p in model.parameters()))
-    # print_model_params(model)
-    # optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
-    # best_time = best_epoch = train_acc = val_acc = test_acc = 0
-
-    # for run in range(args.runs):
-    #     model.reset_parameters()
-    #     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    #     for epoch in range(1, 1 + args.epochs):
-    #         loss = train(model, data, train_idx, optimizer)
-    #         result = test(model, data, split_idx, evaluator)
-    #         logger.add_result(run, result)
-
-    #         if epoch % args.log_steps == 0:
-    #             train_acc, valid_acc, test_acc = result
-    #             # print(f'Run: {run + 1:02d}, '
-    #             #       f'Epoch: {epoch:02d}, '
-    #             #       f'Loss: {loss:.4f}, '
-    #             #       f'Train: {100 * train_acc:.2f}%, '
-    #             #       f'Valid: {100 * valid_acc:.2f}% '
-    #             #       f'Test: {100 * test_acc:.2f}%')
-    #     logger.print_statistics(run)
-    # train_final, valid_final, test_final = logger.print_statistics()
-
-    # result = {"Dataset": opt['dataset'], "train_ratio": int(opt['train_ratio']),
-    #             "Average Train": train_final, " Average Valid": valid_final, " Average Test": test_final}
-    # result_file = open(args.outputpath, "a+", encoding='utf-8')
-    # result_file.write(json.dumps(result) + '\n')
-    # result_file.close()
-
-
+    dataset_enriched = update_dataset(dataset_org, m.weight)
 
 
         # Standard dataset
@@ -733,7 +671,7 @@ def main(cmd_opt):
                                                             model_name="GCN",
                                                             layer_name="GCN",
                                                             dataset=dataset,
-                                                            c_hidden=16, 
+                                                            c_hidden=64,
                                                             num_layers=2,
                                                             dp_rate=0.1)
     print_results(node_gnn_result)
@@ -747,11 +685,10 @@ def main(cmd_opt):
                                                             model_name="GCN",
                                                             layer_name="GCN",
                                                             dataset=dataset_enriched, 
-                                                            c_hidden=16, 
+                                                            c_hidden=64,
                                                             num_layers=2,
                                                             dp_rate=0.1)
     print_results(node_gnn_result)
-
 
 
 
@@ -804,7 +741,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train (default: 100)')
     parser.add_argument('--runs', type=int, default=10)
-    parser.add_argument('--p_laplacian', type=int, default=1,
+    parser.add_argument('--p_laplacian', type=float, default=1,
                         help='the value for p-laplcian (default: 1)')
     parser.add_argument('--num_eigs', type=int, default=7,
                         help='number of eigenvectors (default: 5)')
