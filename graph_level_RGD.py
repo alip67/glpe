@@ -19,6 +19,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torch_geometric.datasets import Planetoid
 from torch_geometric.nn import GINConv
+from torch_geometric.datasets import ZINC
 
 import torch_geometric
 import torch_geometric.nn as geom_nn
@@ -591,48 +592,10 @@ class GCNLayer(nn.Module):
         node_feats = node_feats / num_neighbours
         return node_feats
 
-
-def main():
-    # Training settings
-    parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
-    parser.add_argument('--device', type=int, default=0,
-                        help='which gpu to use if any (default: 0)')
-    parser.add_argument('--p_laplacian', type=int, default=1.2,
-                        help='the value for p-laplcian (default: 1)')
-    parser.add_argument('--num_eigs', type=int, default=5,
-                        help='number of eigenvectors (default: 5)')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of epochs to train (default: 100)')
-    parser.add_argument('--num_workers', type=int, default=0,
-                        help='number of workers (default: 0)')
-    parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
-                        help='dataset name (default: ogbg-molhiv)')
-
-    parser.add_argument('--feature', type=str, default="full",
-                        help='full feature or simple feature')
-    parser.add_argument('--filename', type=str, default="output",
-                        help='filename to output result (default: )')
-    args = parser.parse_args()
-
-    # device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
-    # Path to the folder where the datasets are/should be downloaded 
-    DATASET_PATH = "../data"
-    # Path to the folder where the pretrained models are saved
-    CHECKPOINT_PATH = "../saved_models/node_level"
-
-    # Setting the seed
-    pl.seed_everything(42)
-
-    # Ensure that all operations are deterministic on GPU (if used) for reproducibility
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-    dataset = TUDataset(root='data/TUDataset', name='MUTAG')
+def print_statistics(dataset,type):
 
     print()
-    print(f'Dataset: {dataset}:')
+    print(f'Dataset: {dataset}_{type}:')
     print('====================')
     print(f'Number of graphs: {len(dataset)}')
     print(f'Number of features: {dataset.num_features}')
@@ -653,9 +616,7 @@ def main():
     print(f'Has self-loops: {data.has_self_loops()}')
     print(f'Is undirected: {data.is_undirected()}')
 
-    num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of eigenvectors we calculate
-    p = args.p_laplacian
-
+def preprocess_dataset(dataset,num_eigs,epochs,p,device): 
     datal = []
     for data in dataset:
         #Preprocessing
@@ -672,7 +633,7 @@ def main():
 
         n= eigval.shape[0]
         K = num_eigs
-        epochs = args.epochs
+        epochs = epochs
 
         # instantiate model
         W = torch.tensor(A).float().to(device)
@@ -703,28 +664,94 @@ def main():
 
         #Didnt know how to pretransform the features of CORA; This is my workaround
         datal.append(Data(xx,data.edge_index, y=data.y, edge_attr=data.edge_attr, batch = data.batch))
+    return datal
+
+
+def main():
+    # Training settings
+    parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
+    parser.add_argument('--device', type=int, default=0,
+                        help='which gpu to use if any (default: 0)')
+    parser.add_argument('--p_laplacian', type=int, default=1.2,
+                        help='the value for p-laplcian (default: 1)')
+    parser.add_argument('--num_eigs', type=int, default=5,
+                        help='number of eigenvectors (default: 5)')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='number of epochs to train (default: 100)')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='number of workers (default: 0)')
+    parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
+                        help='dataset name (default: ogbg-molhiv)')
+    parser.add_argument('--batch-size', type=int, default=128)
+
+    parser.add_argument('--feature', type=str, default="full",
+                        help='full feature or simple feature')
+    parser.add_argument('--filename', type=str, default="output",
+                        help='filename to output result (default: )')
+    args = parser.parse_args()
+
+    # device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    # Path to the folder where the datasets are/should be downloaded 
+    DATASET_PATH = "../data"
+    # Path to the folder where the pretrained models are saved
+    CHECKPOINT_PATH = "../saved_models/node_level"
+
+    # Setting the seed
+    pl.seed_everything(42)
+
+    # Ensure that all operations are deterministic on GPU (if used) for reproducibility
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # dataset = TUDataset(root='data/TUDataset', name='MUTAG')
+    dataset = ZINC(root="dataset/ZINC/", subset=True)
+
+    train_data = ZINC(root="data/ZINC/", subset=True, split='train')
+    val_data = ZINC(root="data/ZINC/", subset=True, split='val' )
+    test_data = ZINC(root="data/ZINC/", subset=True, split='test')
+
+
+    print_statistics(train_data,type="train")
+    print_statistics(val_data,type="valid")
+    print_statistics(test_data,type="test")
+
+
+
+
+    num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of eigenvectors we calculate
+    p = args.p_laplacian
+    epochs = args.epochs
+
+    train_dataset = preprocess_dataset(train_data,num_eigs,epochs,p,device)
+    val_dataset = preprocess_dataset(val_data,num_eigs,epochs,p,device)
+    test_dataset = preprocess_dataset(test_data,num_eigs,epochs,p,device)
 
 
     random.seed(42)
     #torch.manual_seed(12345)
     #dataset = dataset.shuffle()
-    random.shuffle(datal)
+    
+    # random.shuffle(datal)
 
-    train_dataset = datal[:150]
-    val_dataset = datal[150:169]
-    test_dataset = datal[169:]
+    # train_dataset = datal[:150]
+    # val_dataset = datal[150:169]
+    # test_dataset = datal[169:]
 
 
     print(f'Number of training graphs: {len(train_dataset)}')
     print(f'Number of test graphs: {len(test_dataset)}')
 
-    BATCH_SIZE = 8
+    # BATCH_SIZE = 8
+    batch_size = args.batch_size
 
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False)
-    val_loader= DataLoader(val_dataset, batch_size=8, shuffle=False)
 
-    model = GCN(num_eigs,dataset.num_classes,hidden_channels=64)
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
+
+    model = GCN(num_eigs,train_data.num_classes,hidden_channels=64)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -733,7 +760,7 @@ def main():
     best_ep = []
     epochs= 200
     for epoch in range(1, epochs):
-        losses = train(model,optimizer,criterion,train_loader,BATCH_SIZE)
+        losses = train(model,optimizer,criterion,train_loader,batch_size)
         ll.append(losses) 
         train_acc = test(model,train_loader)
         test_acc = test(model,test_loader)
