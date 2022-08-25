@@ -63,7 +63,10 @@ from utils import ROOT_DIR
 sns.set_style("whitegrid")
 
 import wandb
+
 from pytorch_lightning.loggers import WandbLogger
+wandb_logger = WandbLogger(project="Node Classification Cora")
+
 
 
 gnn_layer_by_name = {
@@ -292,6 +295,7 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
       model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features + num_eigs, c_out=cora_dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    wandb_logger.watch(model, log="all")
 
 
     # Test best model on the test set
@@ -319,7 +323,7 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,opt_name, lr, weight
     trainer = pl.Trainer(default_root_dir=root_dir,
                          callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
                          gpus=1 if str(device).startswith("cuda") else 0,
-                         logger = WandbLogger(offline=True), 
+                         logger = wandb_logger, 
                          max_epochs=max_epochs)
 
     
@@ -627,6 +631,13 @@ def main(cmd_opt):
 
     # Instantiate optimizer
     lr_m = opt['lr_manifold']
+    
+    # 1. Start a W&B run
+    wandb.init(project='Node Classification Cora')
+
+    # 2. Save model inputs and hyperparameters
+    config = opt
+    config = wandb.config
 
     #optim = torch.optim.SGD(m.parameters(), lr=0.01)
     #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
@@ -735,7 +746,7 @@ def main(cmd_opt):
                                                         dp_rate=opt['dropout']
                                                           )
     print_results(node_gnn_result)
-
+    val_acc = node_gnn_result["val"]
 
 
 
