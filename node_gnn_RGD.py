@@ -622,7 +622,7 @@ def main(cmd_opt):
     if opt['manifold'] == "Euc Exact Stiefel":
         m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
     if opt['manifold'] == "Euc Stiefel":
-        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanExact()).to(device)
+        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefel()).to(device)
 
 
     # Instantiate optimizer
@@ -639,7 +639,7 @@ def main(cmd_opt):
 
 
     decayRate = 0.99
-    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optim)#, gamma=decayRate)
+    my_lr_scheduler = None #torch.optim.lr_scheduler.LinearLR(optimizer=optim)#, gamma=decayRate)
 
     scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
