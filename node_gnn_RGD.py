@@ -720,20 +720,20 @@ def main(cmd_opt):
 
         #Pretransformed with p-LPE
     node_gnn_model, node_gnn_result = train_node_classifier_1(device,
-                                                            num_eigs,
-                                                            CHECKPOINT_PATH,
-                                                            opt_name=opt_name,
-                                                            lr=lr,
-                                                            weight_decay=weight_decay,
-                                                            dataset_type="original",
-                                                            model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset=dataset,
-                                                            max_epochs = opt['max_epochs'],
-                                                            c_hidden=opt['hidden_channels'],
-                                                            num_layers=opt['num_layers'],
-                                                            dp_rate=opt['dropout']
-                                                              )
+                                                        num_eigs,
+                                                        CHECKPOINT_PATH,
+                                                        opt_name=opt_name,
+                                                        lr=lr,
+                                                        weight_decay=weight_decay,
+                                                        dataset_type="lp",
+                                                        model_name="GCN",
+                                                        layer_name="GCN",
+                                                        dataset=dataset_enriched,
+                                                        max_epochs = opt['max_epochs'],
+                                                        c_hidden=opt['hidden_channels'],
+                                                        num_layers=opt['num_layers'],
+                                                        dp_rate=opt['dropout']
+                                                          )
     print_results(node_gnn_result)
 
 
