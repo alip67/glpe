@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-import layers.layers as layers
-import layers.modules as modules
+import PPGN.layers.layers as layers
+import PPGN.layers.modules as modules
 
 
 class BaseModel(nn.Module):

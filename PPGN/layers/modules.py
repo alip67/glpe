@@ -8,11 +8,11 @@ class RegularBlock(nn.Module):
     Take the input through 2 parallel MLP routes, multiply the result, and add a skip-connection at the end.
     At the skip-connection, reduce the dimension back to output_depth
     """
-    def __init__(self, config, in_features, out_features):
+    def __init__(self, in_features, out_features):
         super().__init__()
 
-        self.mlp1 = MlpBlock(in_features, out_features, config.architecture.depth_of_mlp)
-        self.mlp2 = MlpBlock(in_features, out_features, config.architecture.depth_of_mlp)
+        self.mlp1 = MlpBlock(in_features, out_features, 2)
+        self.mlp2 = MlpBlock(in_features, out_features, 2)
 
         self.skip = SkipConnection(in_features+out_features, out_features)
 

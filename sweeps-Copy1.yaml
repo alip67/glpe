@@ -1,0 +1,16 @@
+program: ppgn_opt.py
+method: bayes
+metric:
+  name: end_loss
+  goal: minimize
+parameters:
+  hidden_channels:
+    values: [16,32,64,128,256]
+  num_layers:
+    values: [1,2,3,4]
+  lr:
+    values: [0.1,0.01,0.001,0.0001,0.00001]
+  epochs:
+    value: 50
+  optimizer:
+    values: ["sgd", "rmsprop", "adam"]

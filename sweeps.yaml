@@ -1,0 +1,22 @@
+program: node_gnn_RGD.py
+method: bayes
+metric:
+  name: val_acc
+  goal: minimize
+parameters:
+  dropout:
+    values: [0.1,0.3,0.5]
+  hidden_channels:
+    values: [16,32,64,128]
+  num_layers:
+    values: [1,2,3,4]
+  lr:
+    values: [0.1,0.01,0.001,0.0001,0.00001]
+  epochs:
+    value: 50
+  num_eigs:
+    values: [2,4,6,8,10]
+  optimizer:
+    values: ["sgd", "rmsprop", "adam"]
+  
+  

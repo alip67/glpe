@@ -306,7 +306,7 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
     return model, result
 
 
-def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_name, dataset, **model_kwargs):
+def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_name, dataset, max_epochs,**model_kwargs):
     pl.seed_everything(42)
     node_data_loader = geom_data.DataLoader(dataset, batch_size=1)
     
@@ -316,8 +316,8 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
     trainer = pl.Trainer(default_root_dir=root_dir,
                          callbacks=[ModelCheckpoint(save_weights_only=True, mode="max", monitor="val_acc")],
                          gpus=1 if str(device).startswith("cuda") else 0,
-                         logger = WandbLogger(), 
-                         max_epochs=200)
+                         logger = WandbLogger(offline=True), 
+                         max_epochs=max_epochs)
 
     
     pl.seed_everything()
@@ -681,7 +681,8 @@ def main(cmd_opt):
                                                             model_name="GCN",
                                                             layer_name="GCN",
                                                             dataset=dataset,
-                                                            c_hidden=64,
+                                                            max_epochs = opt['max_epochs'],
+                                                            c_hidden=16,
                                                             num_layers=2,
                                                             dp_rate=0.1)
     print_results(node_gnn_result)
@@ -695,7 +696,8 @@ def main(cmd_opt):
                                                             model_name="GCN",
                                                             layer_name="GCN",
                                                             dataset=dataset_enriched, 
-                                                            c_hidden=64,
+                                                            max_epochs = opt['max_epochs'],
+                                                            c_hidden=16,
                                                             num_layers=2,
                                                             dp_rate=0.1)
     print_results(node_gnn_result)
@@ -734,12 +736,17 @@ if __name__ == '__main__':
                         help="the start value of the train ratio (inclusive).")
     parser.add_argument('--use_lp', action='store_true',
                         help='use LPE eigenfunctions')
+    parser.add_argument('--use_baseline', type=bool, default=False,
+                        help='Train baseline model without positional encoding')
+
 
     # Training settings
     parser.add_argument('--feature', type=str, default="full",
                         help='full feature or simple feature')
     parser.add_argument('--filename', type=str, default="output",
                         help='filename to output result (default: )')
+    parser.add_argument('--max_epochs', type=int, default="200",
+                    help='number of epochs to train the GNN (default: 200)')
 
     # GNN args
     parser.add_argument('--device', type=int, default=0,help='which gpu to use if any (default: 0)')
@@ -749,7 +756,7 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_channels', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=0.01)
-    parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train (default: 100)')
+    parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train for p-LP ev calculations (default: 100)')
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--p_laplacian', type=float, default=1,
                         help='the value for p-laplcian (default: 1)')
@@ -757,6 +764,8 @@ if __name__ == '__main__':
                         help='number of eigenvectors (default: 5)')
     parser.add_argument('--optimizer', type=str, default='adam', help='One from sgd, rmsprop, adam, adagrad, adamax.')
     parser.add_argument('--decay', type=float, default=5e-4, help='Weight decay for optimization')
+    
+    
     # parser.add_argument("--splits", type=int, default=5,
     #                     help="The number of re-shuffling & splitting for each train ratio.")
 
