@@ -196,7 +196,7 @@ class GNNModel(nn.Module):
 
 class NodeLevelGNN(pl.LightningModule):
     
-    def __init__(self, model_name, **model_kwargs):
+    def __init__(self, model_name, opt_name, lr, weight_decay, **model_kwargs):
         super().__init__()
         # Saving hyperparameters
         self.save_hyperparameters()
@@ -205,6 +205,8 @@ class NodeLevelGNN(pl.LightningModule):
             self.model = MLPModel(**model_kwargs)
         else:
             self.model = GNNModel(**model_kwargs)
+        self.optimizer = get_optimizer(opt_name, self.parameters(), lr=lr, weight_decay=weight_decay)
+
         self.loss_module = nn.CrossEntropyLoss()
 
     def forward(self, data, mode="train"):
@@ -227,8 +229,9 @@ class NodeLevelGNN(pl.LightningModule):
         return loss, acc
 
     def configure_optimizers(self):
-        # We use SGD here, but Adam works as well 
-        optimizer = optim.SGD(self.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-3)
+        # We use SGD here, but Adam works as well
+        optimizer = self.optimizer
+        #optimizer = optim.SGD(self.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-3)
         return optimizer
 
     def training_step(self, batch, batch_idx):
@@ -306,7 +309,7 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
     return model, result
 
 
-def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_name, dataset, max_epochs,**model_kwargs):
+def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,opt_name, lr, weight_decay,dataset_type,model_name, dataset, max_epochs,**model_kwargs):
     pl.seed_everything(42)
     node_data_loader = geom_data.DataLoader(dataset, batch_size=1)
     
@@ -323,11 +326,11 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,dataset_type,model_n
     pl.seed_everything()
 
     if dataset_type == "original":
-      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+      model = NodeLevelGNN(model_name,opt_name, lr, weight_decay, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     else:
-      model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+      model = NodeLevelGNN(model_name,opt_name, lr, weight_decay, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
 
-    model = NodeLevelGNN(model_name=model_name, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
+    model = NodeLevelGNN(model_name,opt_name, lr, weight_decay, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
@@ -608,21 +611,35 @@ def main(cmd_opt):
 
     n= eigval.shape[0]
     K = num_eigs
-    epochs = opt['epochs']
+    epochs = opt['epochs_manifold']
 
     # instantiate model
     W = torch.tensor(A).float().to(device)
     F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
-    m = Model_RGD(F_, 1, n, K, ball = geoopt.CanonicalStiefel()).to(device) #I think we should not use F_ at initizialization, rather as a forward input so that we can start different init, or just use the reset parameters differently
+
+    if opt['manifold'] == "Can Stiefel":
+        m = Model_RGD(F_, p, n, K, ball=geoopt.CanonicalStiefel()).to(device)
+    if opt['manifold'] == "Euc Exact Stiefel":
+        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
+    if opt['manifold'] == "Euc Stiefel":
+        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanExact()).to(device)
+
 
     # Instantiate optimizer
-    opt = torch.optim.SGD(m.parameters(), lr=0.01)
+    lr_m = opt['lr_manifold']
+
+    #optim = torch.optim.SGD(m.parameters(), lr=0.01)
     #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-2)
+    #optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr)
     #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+    if opt['optimizer_manifold'] == "adam":
+        optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr_m)
+    if opt['optimizer_manifold'] == "sgd":
+        optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=lr_m, momentum=0.9)
+
 
     decayRate = 0.99
-    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=opt)#, gamma=decayRate)
+    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optim)#, gamma=decayRate)
 
     scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -672,20 +689,33 @@ def main(cmd_opt):
     dataset = dataset_org.copy()
     dataset_enriched = update_dataset(dataset_org, m.weight)
 
+    #load model parameters
 
-        # Standard dataset
-    node_gnn_model, node_gnn_result = train_node_classifier_1(device,
-                                                            num_eigs,
-                                                            CHECKPOINT_PATH,
-                                                            dataset_type="original",
-                                                            model_name="GCN",
-                                                            layer_name="GCN",
-                                                            dataset=dataset,
-                                                            max_epochs = opt['max_epochs'],
-                                                            c_hidden=16,
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
-    print_results(node_gnn_result)
+    use_baseline = opt['use_baseline']
+    opt_name = opt['optimizer']
+    lr = opt['lr']
+    weight_decay = opt['decay']
+
+
+
+    # Standard dataset
+    if not use_baseline:
+        node_gnn_model, node_gnn_result = train_node_classifier_1(device,
+                                                                num_eigs,
+                                                                CHECKPOINT_PATH,
+                                                                opt_name=opt_name,
+                                                                lr=lr,
+                                                                weight_decay=weight_decay,
+                                                                dataset_type="original",
+                                                                model_name="GCN",
+                                                                layer_name="GCN",
+                                                                dataset=dataset,
+                                                                max_epochs = opt['max_epochs'],
+                                                                c_hidden=opt['hidden_channels'],
+                                                                num_layers=opt['num_layers'],
+                                                                dp_rate=opt['dropout']
+                                                                  )
+        print_results(node_gnn_result)
 
 
         #Pretransformed with p-LPE
@@ -697,9 +727,9 @@ def main(cmd_opt):
                                                             layer_name="GCN",
                                                             dataset=dataset_enriched, 
                                                             max_epochs = opt['max_epochs'],
-                                                            c_hidden=16,
-                                                            num_layers=2,
-                                                            dp_rate=0.1)
+                                                            c_hidden=opt['hidden_channels'],
+                                                            num_layers=opt['num_layers'],
+                                                            dp_rate=opt['dropout'])
     print_results(node_gnn_result)
 
 
@@ -734,10 +764,21 @@ if __name__ == '__main__':
                         help="outputh file path to save the result")
     parser.add_argument("--train_ratio", type=float, default=1.,
                         help="the start value of the train ratio (inclusive).")
+
+
+    # Preprocessing args
     parser.add_argument('--use_lp', action='store_true',
                         help='use LPE eigenfunctions')
     parser.add_argument('--use_baseline', type=bool, default=False,
                         help='Train baseline model without positional encoding')
+    parser.add_argument('--manifold', type=str, default="Euc Exact Stiefel",
+                        help='Choice of Stiefel manifold (default: Euc Exact Stiefel). Choices: Euc Stiefel, Can Stiefel')
+    parser.add_argument('--lr_manifold', type=float, default=0.01,
+                        help='Choice of Stiefel manifold (default: Euc Exact Stiefel). Choices: Euc Stiefel, Can Stiefel')
+    parser.add_argument('--optimizer_manifold', type=str, default="sgd",
+                        help='Choice of manifold optimizer (default: SGD). Choices: Adam')
+    parser.add_argument('--epochs_manifold', type=int, default=250, help='number of epochs to train for p-LP ev calculations (default: 250)')
+
 
 
     # Training settings
@@ -746,17 +787,17 @@ if __name__ == '__main__':
     parser.add_argument('--filename', type=str, default="output",
                         help='filename to output result (default: )')
     parser.add_argument('--max_epochs', type=int, default="200",
-                    help='number of epochs to train the GNN (default: 200)')
+                        help='number of epochs to train the GNN (default: 200)')
 
     # GNN args
-    parser.add_argument('--device', type=int, default=0,help='which gpu to use if any (default: 0)')
+    parser.add_argument('--device', type=int, default=0,
+                        help='which gpu to use if any (default: 0)')
     parser.add_argument('--log_steps', type=int, default=1)
     parser.add_argument('--use_sage', action='store_true')
     parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--hidden_channels', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=0.01)
-    parser.add_argument('--epochs', type=int, default=500, help='number of epochs to train for p-LP ev calculations (default: 100)')
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--p_laplacian', type=float, default=1,
                         help='the value for p-laplcian (default: 1)')
