@@ -150,7 +150,7 @@ expts_untracked/
 debug/
 saved_models/
 
-dataset/
+
 images/
 images_out/
 *.png
