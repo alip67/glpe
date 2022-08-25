@@ -305,9 +305,10 @@ num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of 
 p = args.p_laplacian
 epochs = args.epochs
 
-train_dataset = dataset.post_process(dataset[0:10],num_eigs,epochs,p,device)
-# torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
-train_dataset = torch.load('dataset_zinc_p1.pt')
+dataset_dup= dataset.copy()
+train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
+torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
+# train_dataset = torch.load('dataset_zinc_p1.pt')
 
 
 trid=list(range(0,10000))

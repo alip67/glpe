@@ -8,7 +8,7 @@ import networkx as nx
 import pickle
 import os
 import scipy.io as sio
-from math import comb
+from scipy.special import comb
 
 
 from torch_geometric.utils import to_networkx, to_dense_adj
@@ -462,7 +462,8 @@ class Zinc12KDataset(InMemoryDataset):
         data, slices = self.collate(datal)
         dataset.data = data
         dataset.slices = slices
-        self._data_list = datal
+        dataset._data_list = datal
+        return dataset
 
 class BandClassDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None):
