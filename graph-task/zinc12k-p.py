@@ -70,7 +70,7 @@ def print_statistics(dataset,type):
 parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
 parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
-parser.add_argument('--p_laplacian', type=int, default=1,
+parser.add_argument('--p_laplacian', type=int, default=1.4,
                     help='the value for p-laplcian (default: 1)')
 parser.add_argument('--num_eigs', type=int, default=5,
                     help='number of eigenvectors (default: 5)')
@@ -436,7 +436,7 @@ for epoch in range(1, 401):
 
 x = np.arange(0,400)
 y = np.array(ts_loss)
-np.save('ts_loss_p.npy', ts_loss) 
+np.save(f'ts_loss_p{p}.npy', ts_loss) 
 # Plotting the Graph
 plt.plot(x, y)
 plt.title("Curve plotted using the given points")
