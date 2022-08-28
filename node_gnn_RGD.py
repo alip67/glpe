@@ -249,7 +249,6 @@ class NodeLevelGNN(pl.LightningModule):
         model_filename = "model_final.onnx"
         self.to_onnx(model_filename, dummy_input, export_params=True)
         wandb.save(model_filename)
-    """
 
     def test_epoch_end(self, outputs):
         print(outputs)
@@ -260,6 +259,7 @@ class NodeLevelGNN(pl.LightningModule):
                 final_value += test_step_out
 
         self.log("final_metric", final_value)
+    """
 
     # def test_epoch_end(self, test_step_outputs):  # args are defined as part of pl API
     #     dummy_input = torch.zeros(self.hparams["c_in"], device=self.device)
@@ -509,13 +509,13 @@ class Model_RGD(nn.Module):
 
         # Create manifold parameters
         self.weight = geoopt.ManifoldParameter(
-            torch.empty(n, K), manifold=self.ball
+            self.initeigv.clone(), manifold=self.ball
         )
 
-        self.reset_parameters()
+        #self.reset_parameters()
 
     def reset_parameters(self):
-        self.weight = nn.Parameter(self.initeigv.clone())
+        #self.weight = nn.Parameter(self.initeigv.clone())
         pass
 
     def forward(self, X):
