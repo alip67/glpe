@@ -70,7 +70,7 @@ def print_statistics(dataset,type):
 parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
 parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
-parser.add_argument('--p_laplacian', type=int, default=1.4,
+parser.add_argument('--p_laplacian', type=int, default=1,
                     help='the value for p-laplcian (default: 1)')
 parser.add_argument('--num_eigs', type=int, default=5,
                     help='number of eigenvectors (default: 5)')
@@ -129,9 +129,9 @@ p = args.p_laplacian
 epochs = args.epochs
 
 dataset_dup= dataset.copy()
-train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
-torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
-# train_dataset = torch.load('dataset_zinc_p1.pt')
+# train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
+# torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
+train_dataset = torch.load(f'dataset_zinc_p{p}.pt')
 
 
 trid=list(range(0,10000))
@@ -369,7 +369,7 @@ class GatNet(nn.Module):
         x = F.relu(self.fc1(x))        
         return self.fc2(x) 
 
-model = GcnNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
+model = GinNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 print(get_n_params(model))
@@ -436,7 +436,7 @@ for epoch in range(1, 401):
 
 x = np.arange(0,400)
 y = np.array(ts_loss)
-np.save(f'ts_loss_p{p}.npy', ts_loss) 
+np.save(f'ts_loss_gin_p{p}.npy', ts_loss) 
 # Plotting the Graph
 plt.plot(x, y)
 plt.title("Curve plotted using the given points")

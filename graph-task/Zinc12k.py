@@ -6,12 +6,16 @@ import torch.nn.functional as F
 from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import (GINConv,global_add_pool,GATConv,ChebConv,GCNConv)
 
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.io
+
 from libs.spect_conv import SpectConv,ML3Layer
 from libs.utils import Zinc12KDataset,SpectralDesign,get_n_params
 
 transform = SpectralDesign(nmax=37,recfield=2,dv=2,nfreq=7) 
 
-dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform)
+dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform)
 
 trid=list(range(0,10000))
 vlid=list(range(10000,11000))
@@ -346,7 +350,7 @@ class GNNML3(nn.Module):
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GNNML3().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN GNNML1 GNNML3 
+model = GcnNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN GNNML1 GNNML3 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 print(get_n_params(model))
@@ -393,9 +397,15 @@ def test():
 
 bval=1000
 btest=0
+tr_loss= []
+ts_loss=[]
+valid_loss=[]
 for epoch in range(1, 401):
     trloss=train(epoch)
     test_loss,val_loss = test()
+    ts_loss.append(test_loss)
+    tr_loss.append(trloss)
+    valid_loss.append(val_loss) 
     if bval>val_loss:
         bval=val_loss
         btest=test_loss
@@ -403,3 +413,14 @@ for epoch in range(1, 401):
     #print('Epoch: {:02d}, trloss: {:.4f},  Val: {:.4f}, Test: {:.4f}'.format(epoch,trloss,val_acc, test_acc))
     print('Epoch: {:02d}, trloss: {:.4f},  Valloss: {:.4f}, Testloss: {:.4f}, best test loss: {:.4f}'.format(epoch,trloss,val_loss,test_loss,btest))
 
+
+x = np.arange(0,400)
+y = np.array(ts_loss)
+np.save(f'ts_loss_simple.npy', ts_loss) 
+# Plotting the Graph
+plt.plot(x, y)
+plt.title("Curve plotted using the given points")
+plt.xlabel("X")
+plt.ylabel("Y")
+plt.show()
+plt.savefig('loss_ZINC_GCN_simple.png')
