@@ -30,9 +30,10 @@ import argparse
 
 
 import os
-os.environ["WANDB_MODE"]="offline"
+#os.environ["WANDB_MODE"]="dryrun"
 
 import wandb
+#wandb.init(project='Graph Regression Zinc12K')
 
 
  
@@ -75,6 +76,12 @@ def print_statistics(dataset,type):
 # val_loader = DataLoader(dataset[vlid], batch_size=64, shuffle=False)
 # test_loader = DataLoader(dataset[tsid], batch_size=64, shuffle=False)
 
+
+
+###### ADD PARSER ARGUMENTS
+"""
+Add the learning rate, 
+"""
 parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
 parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
@@ -130,7 +137,7 @@ transform = SpectralDesign(nmax=37,recfield=2,dv=2,nfreq=7)
 #dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform) #For Ali
 
 ########## commented this:
-#dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform) #For Sohir
+dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform) #For Sohir
 
 
 # dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/")
@@ -143,11 +150,13 @@ p = args.p_laplacian
 epochs = args.epochs
 
 ######### commented this
-#dataset_dup= dataset.copy()
+dataset_dup= dataset.copy()
 
-# train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
-# torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
-train_dataset = torch.load(f'../dataset_zinc_p{p}.pt')
+train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
+#torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
+torch.save(train_dataset, f'dataset_zinc_p2.pt')
+
+#train_dataset = torch.load(f'../dataset_zinc_p{p}.pt')
 
 
 trid=list(range(0,10000))
@@ -436,26 +445,26 @@ ts_loss=[]
 valid_loss=[]
 
 # 1. Start a W&B run
-wandb.init(project='Graph Regression Zinc12K', config=args)
+#wandb.init(project='Graph Regression Zinc12K', config=args)
 
 
 # 1.1 Make model
-model = GcnNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
+model = GinNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
  
 print(get_n_params(model))
 
 # 2. Save model inputs and hyperparameters
 config = args
-config = wandb.config
+#config = wandb.config
 
 for epoch in range(1, 401):
-    wandb.watch(model, tr_loss, log="all", log_freq=1)
+    #wandb.watch(model, tr_loss, log="all", log_freq=1)
     trloss=train(epoch)
     test_loss,val_loss = test()
-    wandb.log({"epoch": epoch, "val_loss": val_loss})
-    wandb.log({"epoch": epoch, "tr_loss": trloss})
-    wandb.log({"epoch": epoch, "test_loss": test_loss})
+    #wandb.log({"epoch": epoch, "val_loss": val_loss})
+    #wandb.log({"epoch": epoch, "tr_loss": trloss})
+    #wandb.log({"epoch": epoch, "test_loss": test_loss})
     ts_loss.append(test_loss)
     tr_loss.append(trloss)
     valid_loss.append(val_loss) 
@@ -466,18 +475,20 @@ for epoch in range(1, 401):
     #print('Epoch: {:02d}, trloss: {:.4f},  Val: {:.4f}, Test: {:.4f}'.format(epoch,trloss,val_acc, test_acc))
     print('Epoch: {:02d}, trloss: {:.4f},  Valloss: {:.4f}, Testloss: {:.4f}, best test loss: {:.4f}'.format(epoch,trloss,val_loss,test_loss,btest))
 
-wandb.log({"best_val_loss": bval})
-wandb.log({"best_test_loss": btest})
+#wandb.log({"best_val_loss": bval})
+#wandb.log({"best_test_loss": btest})
 
 
 x = np.arange(0,400)
 y = np.array(ts_loss)
-np.save(f'ts_loss_gin_p{p}.npy', ts_loss) 
+#np.save(f'ts_loss_gin_p{p}.npy', ts_loss) 
+np.save(f'ts_loss_gin_p2.npy', ts_loss) 
+
 # Plotting the Graph
 plt.plot(x, y)
-plt.title("Curve plotted using the given points")
-plt.xlabel("X")
-plt.ylabel("Y")
+plt.title("Loss per Epoch for ZINC12K Regression")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
 plt.show()
-plt.savefig('loss_ZINC_GCN_with_p_laplcian.png')
+plt.savefig('loss_ZINC_GIN_with_p_laplacian.png')
 

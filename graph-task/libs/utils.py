@@ -169,7 +169,9 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
         D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
 
         #We transform our eigenvectors into an orthonormalbasis such that it is in the Stiefel manifold
-
+        
+        #Just removed for L_2 LPE
+        """
         hi = get_orthonromal_eigvec(eigval,eigvec)
 
         n= eigval.shape[0]
@@ -200,6 +202,8 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
 
         m.to('cpu')
         xx = torch.cat((data.x, m.weight[:,1:3]),1)
+        """
+        xx = torch.cat((data.x, torch.tensor(eigvec)[:,1:3]),1)
 
         #xx = torch.cat((data.x, torch.tensor(eigvec[:,:7])),1)
 
