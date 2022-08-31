@@ -440,7 +440,7 @@ wandb.init(project='Graph Regression Zinc12K', config=args)
 
 
 # 1.1 Make model
-model = GinNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
+model = GcnNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
  
 print(get_n_params(model))
