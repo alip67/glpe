@@ -85,10 +85,10 @@ Add the learning rate,
 parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
 parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
-parser.add_argument('--p_laplacian', type=int, default=1,
+parser.add_argument('--p_laplacian', type=float, default=1,
                     help='the value for p-laplcian (default: 1)')
-parser.add_argument('--num_eigs', type=int, default=5,
-                    help='number of eigenvectors (default: 5)')
+parser.add_argument('--num_eigs', type=int, default=8,
+                    help='number of eigenvectors (default: 8)')
 parser.add_argument('--epochs', type=int, default=200,
                     help='number of epochs to train (default: 100)')
 parser.add_argument('--num_workers', type=int, default=0,
@@ -133,11 +133,11 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 transform = SpectralDesign(nmax=37,recfield=2,dv=2,nfreq=7) 
 
-# dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform)
+#dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform)
 #dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform) #For Ali
 
 ########## commented this:
-dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform) #For Sohir
+#dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform) #For Sohir
 
 
 # dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/")
@@ -150,13 +150,13 @@ p = args.p_laplacian
 epochs = args.epochs
 
 ######### commented this
-dataset_dup= dataset.copy()
+#dataset_dup= dataset.copy()
 
-train_dataset = dataset.post_process(dataset_dup,num_eigs,epochs,p,device)
+#train_dataset = dataset.post_process(dataset_dup,num_eigs+1,epochs,p,device)
 #torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
-torch.save(train_dataset, f'dataset_zinc_p2.pt')
+#torch.save(train_dataset, f'new_dataset_zinc_p{p}.pt')
 
-#train_dataset = torch.load(f'../dataset_zinc_p{p}.pt')
+train_dataset = torch.load(f'../new_dataset_zinc_p{p}.pt')
 
 
 trid=list(range(0,10000))
@@ -449,7 +449,7 @@ valid_loss=[]
 
 
 # 1.1 Make model
-model = GinNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
+model = GcnNet().to(device)   # GatNet  ChebNet  GcnNet  GinNet  MlpNet  PPGN 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
  
 print(get_n_params(model))
@@ -474,21 +474,28 @@ for epoch in range(1, 401):
         
     #print('Epoch: {:02d}, trloss: {:.4f},  Val: {:.4f}, Test: {:.4f}'.format(epoch,trloss,val_acc, test_acc))
     print('Epoch: {:02d}, trloss: {:.4f},  Valloss: {:.4f}, Testloss: {:.4f}, best test loss: {:.4f}'.format(epoch,trloss,val_loss,test_loss,btest))
-
+    print('Best Val Loss: {:.4f}, Best Test Loss: {:.4f}'.format(bval,btest))
 #wandb.log({"best_val_loss": bval})
 #wandb.log({"best_test_loss": btest})
 
 
 x = np.arange(0,400)
 y = np.array(ts_loss)
-#np.save(f'ts_loss_gin_p{p}.npy', ts_loss) 
-np.save(f'ts_loss_gin_p2.npy', ts_loss) 
+np.save(f'ts_loss_GCN_p{p}.npy', ts_loss) 
+#np.save(f'ts_loss_gin_p2.npy', ts_loss) 
+
+data2 =   np.load(f'../results/ts_loss_simple_p{p}.npy')
+yy = np.array(data2)
+
 
 # Plotting the Graph
-plt.plot(x, y)
-plt.title("Loss per Epoch for ZINC12K Regression")
+plt.plot(x, y, label=f"With {p}-PE")
+plt.plot(x, yy, label="Without PE")
+plt.title("Loss per Epoch for ZINC12K Regression with GCN")
 plt.xlabel("Epochs")
 plt.ylabel("Loss")
+plt.legend()
 plt.show()
-plt.savefig('loss_ZINC_GIN_with_p_laplacian.png')
+plt.savefig(f'loss_ZINC_GCN_with_{p}_laplacian.png')
 
+ 

@@ -88,7 +88,7 @@ class Model_RGD(nn.Module):
 
         # Create manifold parameters
         self.weight = geoopt.ManifoldParameter(
-            torch.empty(n, K), manifold=self.ball
+            self.initeigv.clone(), manifold=self.ball
         )
         #self.points = nn.Parameter(self.initeigv.clone())
         #geotorch.grassmannian(self, "weight") 
@@ -108,7 +108,7 @@ class Model_RGD(nn.Module):
         # Every manifold has a convenience sample method, but you can use your own initializer
         #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
         #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
-        self.weight = nn.Parameter(self.initeigv.clone())
+        #self.weight = nn.Parameter(self.initeigv.clone())
         pass
 
     def forward(self, X):
@@ -167,11 +167,11 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
 
         A = cora_adj.numpy()
         D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
+        """
         #We transform our eigenvectors into an orthonormalbasis such that it is in the Stiefel manifold
         
         #Just removed for L_2 LPE
-        """
+        
         hi = get_orthonromal_eigvec(eigval,eigvec)
 
         n= eigval.shape[0]
@@ -201,14 +201,15 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
         print(end - start, " Second")
 
         m.to('cpu')
-        xx = torch.cat((data.x, m.weight[:,1:3]),1)
+        xx = torch.cat((data.x, m.weight[:,1:num_eigs]),1)
+        
+        #xx = torch.cat((data.x, torch.tensor(eigvec)[:,1:3]),1)
         """
-        xx = torch.cat((data.x, torch.tensor(eigvec)[:,1:3]),1)
-
-        #xx = torch.cat((data.x, torch.tensor(eigvec[:,:7])),1)
+        xx = torch.cat((data.x, torch.tensor(eigvec[:,1:9])),1)
 
         #Didnt know how to pretransform the features of CORA; This is my workaround
         datal.append(Data(xx,data.edge_index, y=data.y, edge_attr=data.edge_attr, batch = data.batch))
+        
     # data, slices = dataset.collate(datal)
     # torch.save((data, slices), f'dataset_zinc_p{p}.pt')
     return datal
@@ -461,6 +462,7 @@ class Zinc12KDataset(InMemoryDataset):
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
+        
     def post_process(self, dataset,num_eigs,epochs,p,device):
         datal = postprocess_dataset(dataset,num_eigs,epochs,p,device)
         data, slices = self.collate(datal)
