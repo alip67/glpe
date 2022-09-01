@@ -167,7 +167,7 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
 
         A = cora_adj.numpy()
         D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-        """
+        
         #We transform our eigenvectors into an orthonormalbasis such that it is in the Stiefel manifold
         
         #Just removed for L_2 LPE
@@ -204,8 +204,8 @@ def postprocess_dataset(dataset,num_eigs,epochs,p,device):
         xx = torch.cat((data.x, m.weight[:,1:num_eigs]),1)
         
         #xx = torch.cat((data.x, torch.tensor(eigvec)[:,1:3]),1)
-        """
-        xx = torch.cat((data.x, torch.tensor(eigvec[:,1:9])),1)
+        
+        # xx = torch.cat((data.x, torch.tensor(eigvec[:,1:9])),1)
 
         #Didnt know how to pretransform the features of CORA; This is my workaround
         datal.append(Data(xx,data.edge_index, y=data.y, edge_attr=data.edge_attr, batch = data.batch))
@@ -466,6 +466,7 @@ class Zinc12KDataset(InMemoryDataset):
     def post_process(self, dataset,num_eigs,epochs,p,device):
         datal = postprocess_dataset(dataset,num_eigs,epochs,p,device)
         data, slices = self.collate(datal)
+        dataset.original_num_node_features = dataset.num_node_features
         dataset.data = data
         dataset.slices = slices
         dataset._data_list = datal

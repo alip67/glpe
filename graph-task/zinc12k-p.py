@@ -87,7 +87,7 @@ parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--p_laplacian', type=float, default=1,
                     help='the value for p-laplcian (default: 1)')
-parser.add_argument('--num_eigs', type=int, default=8,
+parser.add_argument('--num_eigs', type=int, default=5,
                     help='number of eigenvectors (default: 8)')
 parser.add_argument('--epochs', type=int, default=200,
                     help='number of epochs to train (default: 100)')
@@ -101,6 +101,8 @@ parser.add_argument('--feature', type=str, default="full",
                     help='full feature or simple feature')
 parser.add_argument('--filename', type=str, default="output",
                     help='filename to output result (default: )')
+parser.add_argument('--lap_method', type=str, default="sign_flip",
+                    help='dataset name (default: ogbg-molhiv)')
 args = parser.parse_args()
 
 
@@ -134,7 +136,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 transform = SpectralDesign(nmax=37,recfield=2,dv=2,nfreq=7) 
 
 #dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform)
-#dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform) #For Ali
+dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/",pre_transform=transform) #For Ali
 
 ########## commented this:
 #dataset = Zinc12KDataset(root="dataset/ZINC/",pre_transform=transform) #For Sohir
@@ -143,25 +145,31 @@ transform = SpectralDesign(nmax=37,recfield=2,dv=2,nfreq=7)
 # dataset = Zinc12KDataset(root="graph-task/dataset/ZINC/")
 
 ########## commented this:
-#print_statistics(dataset,type="train") 
+print_statistics(dataset,type="train") 
 
 num_eigs = args.num_eigs#gives the dimension of the embedding or/ the number of eigenvectors we calculate
 p = args.p_laplacian
 epochs = args.epochs
 
 ######### commented this
-#dataset_dup= dataset.copy()
+dataset_dup= dataset.copy()
 
-#train_dataset = dataset.post_process(dataset_dup,num_eigs+1,epochs,p,device)
-#torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
+train_dataset = dataset.post_process(dataset_dup[0:400],num_eigs+1,epochs,p,device)
+# torch.save(train_dataset, f'dataset_zinc_p{p}.pt')
 #torch.save(train_dataset, f'new_dataset_zinc_p{p}.pt')
 
-train_dataset = torch.load(f'../new_dataset_zinc_p{p}.pt')
+# train_dataset = torch.load(f'../new_dataset_zinc_p{p}.pt')
+
+# train_dataset = torch.load(f'dataset_zinc_p{p}.pt')
 
 
-trid=list(range(0,10000))
-vlid=list(range(10000,11000))
-tsid=list(range(11000,12000))
+# trid=list(range(0,10000))
+# vlid=list(range(10000,11000))
+# tsid=list(range(11000,12000))
+
+trid=list(range(0,200))
+vlid=list(range(200,300))
+tsid=list(range(300,400))
 
 train_loader = DataLoader(train_dataset[trid], batch_size=64, shuffle=True)
 val_loader = DataLoader(train_dataset[vlid], batch_size=64, shuffle=False)
@@ -396,13 +404,20 @@ class GatNet(nn.Module):
 
 
 
-def train(epoch):
+def train(epoch,lap_method):
     
     model.train()
     
     L=0
     correct=0
     for data in train_loader:
+        if lap_method == 'sign_flip':
+            batch_pos_enc = data.x[:,-num_eigs:]
+            sign_flip = torch.rand(batch_pos_enc.size(1))
+            sign_flip[sign_flip>=0.5] = 1.0; sign_flip[sign_flip<0.5] = -1.0
+            batch_pos_enc = batch_pos_enc * sign_flip.unsqueeze(0)
+            data.x[:,-num_eigs:] = batch_pos_enc
+
         data = data.to(device)
         optimizer.zero_grad()
         
@@ -416,11 +431,17 @@ def train(epoch):
 
     return L/len(trid)
 
-def test():
+def test(lap_method):
     model.eval()
     
     L=0
     for data in test_loader:
+        if lap_method == 'sign_flip':
+            batch_pos_enc = data.x[:,-num_eigs:]
+            sign_flip = torch.rand(batch_pos_enc.size(1))
+            sign_flip[sign_flip>=0.5] = 1.0; sign_flip[sign_flip<0.5] = -1.0
+            batch_pos_enc = batch_pos_enc * sign_flip.unsqueeze(0)
+            data.x[:,-num_eigs:] = batch_pos_enc
         data = data.to(device)
 
         pre=model(data)
@@ -431,6 +452,12 @@ def test():
     
     Lv=0
     for data in val_loader:
+        if lap_method == 'sign_flip':
+            batch_pos_enc = data.x[:,-num_eigs:]
+            sign_flip = torch.rand(batch_pos_enc.size(1))
+            sign_flip[sign_flip>=0.5] = 1.0; sign_flip[sign_flip<0.5] = -1.0
+            batch_pos_enc = batch_pos_enc * sign_flip.unsqueeze(0)
+            data.x[:,-num_eigs:] = batch_pos_enc
         data = data.to(device)
         pre=model(data)
         #lss= torch.square(pre- data.y.unsqueeze(-1)).sum() 
@@ -460,8 +487,8 @@ config = args
 
 for epoch in range(1, 401):
     #wandb.watch(model, tr_loss, log="all", log_freq=1)
-    trloss=train(epoch)
-    test_loss,val_loss = test()
+    trloss=train(epoch,args.lap_method)
+    test_loss,val_loss = test(args.lap_method)
     #wandb.log({"epoch": epoch, "val_loss": val_loss})
     #wandb.log({"epoch": epoch, "tr_loss": trloss})
     #wandb.log({"epoch": epoch, "test_loss": test_loss})

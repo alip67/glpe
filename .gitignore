@@ -159,3 +159,5 @@ experiments/
 wandb/
 ESAN/
 graph-task/dataset/*/processed
+signnet/
+out/
