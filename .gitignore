@@ -154,7 +154,7 @@ saved_models/
 images/
 images_out/
 *.png
-data/
+# data/
 experiments/
 wandb/
 ESAN/
