@@ -390,8 +390,41 @@ def training_loop1(model, optimizer, sched,W, epochs=100):
         losses.append(loss)  
     return losses
 
+def get_p_eigvals(X, F, p):
+    n = X.shape[0]
+    K = F.shape[1]
+    f = F
+    FFF = torch.norm(F, p,dim=0)
+    FFF = torch.pow(FFF,-1)
+    FFF.unsqueeze_(-1)
+    FFF.unsqueeze_(-1)
+    FFF.unsqueeze_(-1)
+    FFF = FFF.repeat(1,n,1,1)
+    FFF = torch.pow(FFF,p)
+
+    FF = f.repeat(1,n)
+    FF = FF.view(n,n,K)
+    FF = FF.transpose(2,0)
+
+    GG =FF.transpose(1,2)
+
+    KK = FF - GG 
+    KKK = KK.unsqueeze(dim=-1)
+    KKK = torch.pow(torch.abs(KKK),p)
+
+    X = X.unsqueeze(dim=1)
+
+    KKK = KKK.type(torch.float64)
+    X = X.type(torch.float64)
+
+    LL = torch.matmul(X, KKK)
+    b = torch.matmul(LL.float(),FFF.float())
+    b = torch.sum(b, dim=1).squeeze_()
+    return b
+
 def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device): 
 
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).todense()
     A = np.asarray(A)
 
@@ -410,16 +443,13 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     # instantiate model
     W = torch.tensor(A).float().to(device)
     F_ = torch.tensor(hi[:, 0:pos_enc_dim]).float().to(device) #We can use previous outputs weight
-    m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device) #I think we should not use F_ at initizialization, rather as a forward input so that we can start different init, or just use the reset parameters differently
+    m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device) 
 
     # Instantiate optimizer
-    opt = torch.optim.SGD(m.parameters(), lr=0.01)
-    #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2)
-    #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
-
+    
     decayRate = 0.99
-    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=opt)#, gamma=decayRate)
+    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
 
     scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -431,8 +461,15 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
 
     m.to('cpu')
     # xx = torch.cat((data.x, m.weight[:,1:pos_enc_dim]),1)
+    
+    
+    p_eigs = m.weight[:,1:pos_enc_dim]
+    p_eigvals = get_p_eigvals(W, p_eigs, p)
+    eigidx = torch.argsort(p_eigvals)
+    p_eigvals = p_eigvals[eigidx]
+    p_eigs = p_eigs[:, eigidx]
 
-    g.ndata['pos_enc'] = m.weight[:,1:pos_enc_dim]
+    g.ndata['pos_enc'] = p_eigs
 
     # zero padding to the end if n < pos_enc_dim
     n = g.number_of_nodes()

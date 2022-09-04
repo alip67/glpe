@@ -33,7 +33,7 @@
         "dropout": 0.0,
         "batch_norm": true,
         "pe_init": "lap_p_pe",
-	"p_lap_eppchs": 1000,
+	"p_lap_epochs": 500,
 	"p_laplacian": 1,
         "pos_enc_dim": 8,
         "use_lapeig_loss": false,
