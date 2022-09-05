@@ -349,7 +349,9 @@ class Model_RGD(nn.Module):
         function (a + exp(-k * X) + b),
         """
         #p=2
+        
         f = self.weight
+        self.K = f.shape[1]
         FF = f.repeat(1,self.n)
         FF = FF.reshape(self.n,self.n,self.K)
         #FFF = torch.sum(torch.pow(torch.abs(f), 1/p))
@@ -463,7 +465,8 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     # xx = torch.cat((data.x, m.weight[:,1:pos_enc_dim]),1)
     
     
-    p_eigs = m.weight[:,1:pos_enc_dim]
+    p_eigs = m.weight[:,1:pos_enc_dim].to('cpu')
+    W = W.to('cpu')
     p_eigvals = get_p_eigvals(W, p_eigs, p)
     eigidx = torch.argsort(p_eigvals)
     p_eigvals = p_eigvals[eigidx]
@@ -614,6 +617,10 @@ class MoleculeDataset(torch.utils.data.Dataset):
         self.train.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.train.graph_lists]
         self.val.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.val.graph_lists]
         self.test.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.test.graph_lists]
+        
+        torch.save(self.train.graph_lists, f'train_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
+        torch.save(self.val.graph_lists, f'val_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
+        torch.save(self.test.graph_lists, f'test_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
         
     def _make_full_graph(self, adaptive_weighting=None):
         self.train.graph_lists = [make_full_graph(g, adaptive_weighting) for g in self.train.graph_lists]

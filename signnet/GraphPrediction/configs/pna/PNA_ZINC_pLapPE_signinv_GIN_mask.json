@@ -49,7 +49,7 @@
         "pe_init": "lap_p_pe",
 	"p_lap_epochs": 1000,
 	"p_laplacian": 1,
-        "pos_enc_dim": 8, 
+        "pos_enc_dim": 37, 
         
         "lap_method": "sign_inv",
         "sign_inv_net": "masked_gin",
