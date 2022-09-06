@@ -424,7 +424,13 @@ def get_p_eigvals(X, F, p):
     b = torch.sum(b, dim=1).squeeze_()
     return b
 
-def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device): 
+def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
+
+    n = g.number_of_nodes()
+    if n <= pos_enc_dim:
+        K = n
+    else: 
+        K = pos_enc_dim 
 
     #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).todense()
@@ -439,7 +445,6 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     hi = get_orthonromal_eigvec(eigval,eigvec)
 
     n= eigval.shape[0]
-    K = pos_enc_dim
     epochs = epochs
 
     # instantiate model
@@ -465,9 +470,8 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     # xx = torch.cat((data.x, m.weight[:,1:pos_enc_dim]),1)
     
     
-    p_eigs = m.weight[:,1:pos_enc_dim].to('cpu')
-    W = W.to('cpu')
-    p_eigvals = get_p_eigvals(W, p_eigs, p)
+    p_eigs = m.weight[:,1:pos_enc_dim]
+    p_eigvals = get_p_eigvals(W.to('cpu'), p_eigs, p)
     eigidx = torch.argsort(p_eigvals)
     p_eigvals = p_eigvals[eigidx]
     p_eigs = p_eigs[:, eigidx]
@@ -611,16 +615,21 @@ class MoleculeDataset(torch.utils.data.Dataset):
         self.val.graph_lists = [init_positional_encoding(g, pos_enc_dim, type_init) for g in self.val.graph_lists]
         self.test.graph_lists = [init_positional_encoding(g, pos_enc_dim, type_init) for g in self.test.graph_lists]
 
-    def _add_p_positional_encodings(self, pos_enc_dim, epochs,p,device):
+    def _add_p_positional_encodings(self, pos_enc_dim, epochs,p,use_cache,device):
+        ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
-        # Initializing p-positional encoding eith model RGD
-        self.train.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.train.graph_lists]
-        self.val.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.val.graph_lists]
-        self.test.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.test.graph_lists]
-        
-        torch.save(self.train.graph_lists, f'train_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
-        torch.save(self.val.graph_lists, f'val_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
-        torch.save(self.test.graph_lists, f'test_dataset_zinc_p{p}_{pos_enc_dim}EVs.pt')
+        if use_cache:
+            self.train.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_p{p}.pt')
+            self.val.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_p{p}.pt')
+            self.test.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_p{p}.pt')
+        else: 
+            # Initializing p-positional encoding eith model RGD
+            self.val.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.val.graph_lists]
+            torch.save(self.val.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_p{p}.pt')
+            self.train.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.train.graph_lists]         
+            self.test.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.test.graph_lists]
+            torch.save(self.train.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_p{p}.pt')            
+            torch.save(self.test.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_p{p}.pt')
         
     def _make_full_graph(self, adaptive_weighting=None):
         self.train.graph_lists = [make_full_graph(g, adaptive_weighting) for g in self.train.graph_lists]

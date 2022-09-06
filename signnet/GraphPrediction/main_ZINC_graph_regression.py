@@ -116,7 +116,7 @@ def train_val_pipeline(MODEL_NAME, dataset, params, net_params, dirs):
     elif net_params['pe_init'] == 'lap_p_pe':
         tt = time.time()
         print("[!] -LapPE: Initializing graph positional encoding with p-Laplacian PE.")
-        dataset._add_p_positional_encodings(net_params['pos_enc_dim'],net_params['p_lap_epochs'],net_params['p_laplacian'], device=device)
+        dataset._add_p_positional_encodings(net_params['pos_enc_dim'],net_params['p_lap_epochs'],net_params['p_laplacian'],params['use_cache'], device=device)
         print("[!] Time taken: ", time.time()-tt)
         
     if MODEL_NAME in ['SAN', 'GraphiT', 'Transformer']:
