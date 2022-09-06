@@ -19,7 +19,8 @@
         "min_lr": 1e-6,
         "weight_decay": 3e-6,
         "print_epoch_interval": 5,
-        "max_time": 48
+        "max_time": 48,
+	"use_cache": false
     },
     
     "net_params": {
@@ -51,6 +52,7 @@
 	"p_laplacian": 1,
         "pos_enc_dim": 37, 
         
+
         "lap_method": "sign_inv",
         "sign_inv_net": "masked_gin",
         "sign_inv_activation": "relu",   

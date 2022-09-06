@@ -378,7 +378,7 @@ class Model_RGD(nn.Module):
         b = torch.sum(b)
         return b
 
-def training_loop1(model, optimizer, sched,W, epochs=100):
+def training_loop1(model, optimizer, sched,W, epochs=1000):
     "Training loop for torch model."
     losses = []
     for i in range(epochs):
@@ -388,7 +388,8 @@ def training_loop1(model, optimizer, sched,W, epochs=100):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        #sched.step(loss)
+        if sched is not None:
+            sched.step(loss)
         losses.append(loss)  
     return losses
 
@@ -471,6 +472,8 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     
     
     p_eigs = m.weight[:,1:pos_enc_dim]
+    
+    #Order the p-eigenvector ascending with repect to the eigenvalues
     p_eigvals = get_p_eigvals(W.to('cpu'), p_eigs, p)
     eigidx = torch.argsort(p_eigvals)
     p_eigvals = p_eigvals[eigidx]
