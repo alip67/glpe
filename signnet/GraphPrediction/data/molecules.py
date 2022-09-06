@@ -432,7 +432,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
         K = n
     else: 
         K = pos_enc_dim 
-
+    
     #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).todense()
     A = np.asarray(A)
@@ -444,6 +444,23 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     #Just removed for L_2 LPE
     
     hi = get_orthonromal_eigvec(eigval,eigvec)
+    
+    """
+    tau=0
+    A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).toarray() + tau / g.number_of_nodes()
+    D = np.diag((dgl.backend.asnumpy(g.in_degrees()).clip(1) + tau))
+    L = D-A
+
+    # Eigenvectors with PYTORCH
+    # Reason: pytorch has the fct torch.linalg.eigh which directly gives an ONB.
+    eigval, eigvec = torch.linalg.eigh(torch.tensor(L))
+    eigval = eigval.numpy()
+    eigvec = eigvec.numpy()
+    
+    idx = eigval.argsort() # increasing order
+    eigval, hi = eigval[idx], np.real(hi[:,idx])
+    hi = eigvec
+    """
 
     n= eigval.shape[0]
     epochs = epochs
@@ -459,8 +476,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     decayRate = 0.99
     my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
 
-    scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-
+    
     #Learn the 1-eigenvector. It is then given by m.weight
     start = timer()
     losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  

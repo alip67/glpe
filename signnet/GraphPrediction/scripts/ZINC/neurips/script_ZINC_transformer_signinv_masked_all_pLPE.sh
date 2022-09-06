@@ -17,7 +17,7 @@ seed3=35
 code=main_ZINC_graph_regression.py 
 dataset=ZINC
 
-python $code --dataset $dataset --gpu_id 0 --seed $seed0 --config 'configs/transformer/Transformer_ZINC_LapPE_signinv_GIN_masked.json' 
-python $code --dataset $dataset --gpu_id 0 --seed $seed1 --config 'configs/transformer/Transformer_ZINC_LapPE_signinv_GIN_masked.json' 
-python $code --dataset $dataset --gpu_id 0 --seed $seed2 --config 'configs/transformer/Transformer_ZINC_LapPE_signinv_GIN_masked.json' 
-python $code --dataset $dataset --gpu_id 0 --seed $seed3 --config 'configs/transformer/Transformer_ZINC_LapPE_signinv_GIN_masked.json' 
+python $code --dataset $dataset --gpu_id 0 --seed $seed0 --config 'configs/neurips/Transformer_ZINC_all_pLapPE_signinv_GIN_masked.json'
+python $code --dataset $dataset --gpu_id 0 --seed $seed1 --config 'configs/neurips/Transformer_ZINC_all_pLapPE_signinv_GIN_masked.json'
+python $code --dataset $dataset --gpu_id 0 --seed $seed2 --config 'configs/neurips/Transformer_ZINC_all_pLapPE_signinv_GIN_masked.json'
+python $code --dataset $dataset --gpu_id 0 --seed $seed3 --config 'configs/neurips/Transformer_ZINC_all_pLapPE_signinv_GIN_masked.json'
