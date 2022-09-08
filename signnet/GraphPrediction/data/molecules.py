@@ -323,25 +323,13 @@ class Model_RGD(nn.Module):
         self.weight = geoopt.ManifoldParameter(
             self.initeigv.clone(), manifold=self.ball
         )
-        #self.points = nn.Parameter(self.initeigv.clone())
-        #geotorch.grassmannian(self, "weight") 
-        #Stiefel = self.parametrizations.weight[0]
-        #self.weight = Stiefel.sample()
-        #self.linear = nn.Linear(n, K)
-        #self.linear.weight = nn.Parameter(D) 
-        #geotorch.orthogonal(self.linear, "weight")     
-        #self.linear.weight =  D.transpose(1,0)
-        #self.linear.weight =  torch.eye(K,n)
-        #geotorch.orthogonal(self.weights)
-        #geotorch.Stiefel(self.linear, "weight") 
-        #geotorch.Stiefel(self.weights)
-        self.reset_parameters()
 
-    def reset_parameters(self):
-        # Every manifold has a convenience sample method, but you can use your own initializer
-        #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
-        #Stiefel = nn.Parameter(self.initeigv.clone())#self.initeigv#.type(torch.float64).requires_grad_()
-        #self.weight = nn.Parameter(self.initeigv.clone())
+
+    def set_parameters(self, init_eig):
+        self.initeigv = init_eig
+        self.weight = geoopt.ManifoldParameter(
+            init_eig.clone(), manifold=self.ball
+        )
         pass
 
     def forward(self, X):
@@ -349,9 +337,7 @@ class Model_RGD(nn.Module):
         function (a + exp(-k * X) + b),
         """
         #p=2
-        
         f = self.weight
-        self.K = f.shape[1]
         FF = f.repeat(1,self.n)
         FF = FF.reshape(self.n,self.n,self.K)
         #FFF = torch.sum(torch.pow(torch.abs(f), 1/p))
@@ -378,7 +364,8 @@ class Model_RGD(nn.Module):
         b = torch.sum(b)
         return b
 
-def training_loop1(model, optimizer, sched,W, epochs=1000):
+
+def training_loop1(model, optimizer, sched,W, epochs=200):
     "Training loop for torch model."
     losses = []
     for i in range(epochs):
@@ -389,7 +376,7 @@ def training_loop1(model, optimizer, sched,W, epochs=1000):
         optimizer.step()
         optimizer.zero_grad()
         if sched is not None:
-            sched.step(loss)
+            sched.step()
         losses.append(loss)  
     return losses
 
@@ -431,7 +418,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     if n <= pos_enc_dim:
         K = n
     else: 
-        K = pos_enc_dim 
+        K = pos_enc_dim+1 
     
     #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).todense()
@@ -461,33 +448,38 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     eigval, hi = eigval[idx], np.real(hi[:,idx])
     hi = eigvec
     """
-
-    n= eigval.shape[0]
-    epochs = epochs
-
-    # instantiate model
-    W = torch.tensor(A).float().to(device)
-    F_ = torch.tensor(hi[:, 0:pos_enc_dim]).float().to(device) #We can use previous outputs weight
-    m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device) 
-
-    # Instantiate optimizer
-    optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2)
-    
-    decayRate = 0.99
-    my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
-
-    
-    #Learn the 1-eigenvector. It is then given by m.weight
     start = timer()
-    losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  
+
+    for i in range(1,9):
+        n = eigval.shape[0]
+        p = 2- (i/10)
+
+        W = torch.tensor(A).float()#.to(device)
+        if i == 1:
+            F_ = torch.tensor(hi[:, :K]).float()#.to(device) #We can use previous outputs weight
+        else: F_ = m.weight.clone()
+
+        m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact())#.to(device)
+
+        # Instantiate optimizer
+        optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-2)
+
+
+        decayRate = 0.99
+        
+        my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.25)
+
+
+        #Learn the 1-eigenvector. It is then given by m.weight
+        losses = training_loop1(m, optimizer,my_lr_scheduler,W, 200)  
+        
     end = timer()
     print(end - start, " Second")
-
-    m.to('cpu')
+    
+    m#.to('cpu')
     # xx = torch.cat((data.x, m.weight[:,1:pos_enc_dim]),1)
-    
-    
-    p_eigs = m.weight[:,1:pos_enc_dim]
+      
+    p_eigs = m.weight[:,1:K]
     
     #Order the p-eigenvector ascending with repect to the eigenvalues
     p_eigvals = get_p_eigvals(W.to('cpu'), p_eigs, p)
