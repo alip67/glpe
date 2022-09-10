@@ -1,13 +1,13 @@
 {
     "gpu": {
         "use": true,
-        "id": 2
+        "id": 1
     },
     
     "model": "PNA",
     "dataset": "ZINC",
     
-    "out_dir": "out/PNA_ZINC_singinv_cat_pe/",
+    "out_dir": "out/PNA_ZINC_NoPE/",
     
     "params": {
         "seed": 41,
@@ -19,13 +19,19 @@
         "min_lr": 1e-6,
         "weight_decay": 3e-6,
         "print_epoch_interval": 5,
-        "max_time": 48
+        "max_time": 48,
+	"use_cache": true
     },
     
     "net_params": {
+        "pe_init": "lap_p_pe",
+        "p_lap_epochs": 200,
+        "p_laplacian": 1.2,
+        "pos_enc_dim": 4,
+
         "L": 16,
-        "hidden_dim": 70,
-        "out_dim": 70,
+        "hidden_dim": 80,
+        "out_dim": 80,
         "residual": true,
         "edge_feat": true,
         "readout": "sum",
@@ -46,15 +52,8 @@
         "alpha_loss": 1e-4,
         "lambda_loss": 1000,
 
-        "pe_init": "lap_pe",
-        "pos_enc_dim": 4, 
-        
-        "lap_method": "sign_inv",
-        "sign_inv_net": "masked_gin",
-        "sign_inv_activation": "relu",   
-        "sign_inv_layers": 8, 
-        "phi_out_dim": 70,
-        "pe_aggregate": "concat",
+        "pe_aggregate": "add",
+        "lap_method": "sign_flip",
         
         "lap_lspe": false
     }

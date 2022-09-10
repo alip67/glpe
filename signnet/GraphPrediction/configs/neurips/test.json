@@ -1,7 +1,7 @@
 {
     "gpu": {
         "use": true,
-        "id": 1
+        "id": 2
     },
     
     "model": "PNA",
@@ -20,7 +20,7 @@
         "weight_decay": 3e-6,
         "print_epoch_interval": 5,
         "max_time": 48,
-	"use_cache": false
+	"use_cache": true
     },
     
     "net_params": {
