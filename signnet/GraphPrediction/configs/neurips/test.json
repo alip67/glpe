@@ -31,7 +31,7 @@
         "edge_feat": true,
         "readout": "sum",
         "in_feat_dropout": 0.0,
-        "dropout": 0.0,
+        "dropout": 0.05,
         "graph_norm": true,
         "batch_norm": true,
         "aggregators": "mean max min std",

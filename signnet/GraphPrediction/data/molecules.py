@@ -450,7 +450,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     """
     start = timer()
 
-    for i in range(1,9):
+    for i in range(1,5):
         n = eigval.shape[0]
         p = 2- (i/10)
 
