@@ -546,11 +546,12 @@ def training_loop1(model, optimizer, sched,W, epochs=100):
     "Training loop for torch model."
     losses = []
     for i in range(epochs):
+        optimizer.zero_grad()
         preds = model(W)
         loss = preds
         loss.backward()
         optimizer.step()
-        optimizer.zero_grad()
+        sched.step
         losses.append(loss)
     return losses
 
@@ -594,112 +595,117 @@ def main(cmd_opt):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
-
-
-    cora_adj = to_dense_adj(dataset_org[0].edge_index)
-    cora_adj.squeeze_()
-
-    num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
-
-    A = cora_adj.numpy()
-    D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
-    p = opt['p_laplacian']
-    alpha = 0.01
-
-    hi = get_orthonromal_eigvec(eigval,eigvec)
-
-
-    W = torch.tensor(A)
-
-    n= eigval.shape[0]
-    K = num_eigs
-    epochs = opt['epochs_manifold']
-
-    # instantiate model
-    W = torch.tensor(A).float().to(device)
-    F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
-
-    if opt['manifold'] == "Can Stiefel":
-        m = Model_RGD(F_, p, n, K, ball=geoopt.CanonicalStiefel()).to(device)
-    if opt['manifold'] == "Euc Exact Stiefel":
-        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
-    if opt['manifold'] == "Euc Stiefel":
-        m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefel()).to(device)
-
-
-    # Instantiate optimizer
-    lr_m = opt['lr_manifold']
+    ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
     
-    # 1. Start a W&B run
-    wandb.init(project='Node Classification Cora')
+    #dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
+    dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', True)
+        
+    if not opt['use_cache']:
+        cora_adj = to_dense_adj(dataset_org[0].edge_index)
+        cora_adj.squeeze_()
 
-    # 2. Save model inputs and hyperparameters
-    config = opt
-    config = wandb.config
+        num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
 
-    #optim = torch.optim.SGD(m.parameters(), lr=0.01)
-    #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    #optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr)
-    #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
-    if opt['optimizer_manifold'] == "adam":
-        optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr_m)
-    if opt['optimizer_manifold'] == "sgd":
-        optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=lr_m, momentum=0.9)
+        A = cora_adj.numpy()
+        D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
+
+        p = opt['p_laplacian']
+        alpha = 0.01
+
+        hi = get_orthonromal_eigvec(eigval,eigvec)
+
+        """
+        W = torch.tensor(A)
+
+        n= eigval.shape[0]
+        K = num_eigs
+        epochs = opt['epochs_manifold']
+
+        # instantiate model
+        W = torch.tensor(A).float().to(device)
+        F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
+
+        if opt['manifold'] == "Can Stiefel":
+            m = Model_RGD(F_, p, n, K, ball=geoopt.CanonicalStiefel()).to(device)
+        if opt['manifold'] == "Euc Exact Stiefel":
+            m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
+        if opt['manifold'] == "Euc Stiefel":
+            m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefel()).to(device)
 
 
-    decayRate = 0.99
-    my_lr_scheduler = None #torch.optim.lr_scheduler.LinearLR(optimizer=optim)#, gamma=decayRate)
+        # Instantiate optimizer
+        lr_m = opt['lr_manifold']
 
-    scheduler = None #torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+        # 1. Start a W&B run
+        wandb.init(project='Node Classification Cora')
 
-    start = timer()
-    #for i in range(0,10):
-    #  losses = training_loop1(m, opt,scheduler)
-    #end = timer()
-    losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs) 
-    end = timer()
-    print(end - start, " second")
+        # 2. Save model inputs and hyperparameters
+        config = opt
+        config = wandb.config
+
+        #optim = torch.optim.SGD(m.parameters(), lr=0.01)
+        #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+        #optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr)
+        #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+        if opt['optimizer_manifold'] == "adam":
+            optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr_m)
+        if opt['optimizer_manifold'] == "sgd":
+            optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=lr_m, momentum=0.9)
+
+        """
+        
+        for i in range(1,9):
+            n = eigval.shape[0]
+            K = num_eigs
+            epochs = 1000
+
+            # instantiate model
+            p = 2- (i/10)
+
+            W = torch.tensor(A).float().to(device)
+            if i == 1:
+                F_ = torch.tensor(hi[:,  :num_eigs]).float().to(device) #We can use previous outputs weight
+            else: F_ = m.weight.clone()
+
+            m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device)
+
+            # Instantiate optimizer
+            #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+            #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-3)
+            optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-3)
+
+            #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+
+            decayRate = 0.99
+            #my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
+            #my_lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, threshold=1, threshold_mode='rel', cooldown=0, min_lr=0, eps=1e-08, verbose=False)
+            #my_lr_scheduler = None
+            my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+            #my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.25)
+
+
+            #Learn the 1-eigenvector. It is then given by m.weight
+            start = timer()
+            losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  
+            end = timer()
+            print(end - start, " Second")
+        m.to('cpu')
+
+        if args.use_lp:
+            dataset = update_dataset(dataset_org, m.weight[1:K])
+        opt = cmd_opt
+        dataset = dataset_org.copy()
+        dataset_enriched = update_dataset(dataset_org, m.weight[1:K])
+            
+            
+
+        
+        
+
+
+        torch.save(dataset_enriched, f'{ROOT_DIR}/p-embeddings/dataset_enriched.pt')            
+    else: dataset_enriched = torch.load(f'{ROOT_DIR}/p-embeddings/dataset_enriched.pt')
     
-
-    loss = [x.to('cpu').detach().numpy() for x in losses]
-    x = np.arange(0,epochs)
-    y = np.array(loss)
-    
-    # Plotting the Graph
-    m.to('cpu')
-
-    """
-    plt.plot(x, y)
-    plt.title("Loss per epoch in optimization for p-eigenvectors")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.show()
-    plt.savefig('loss.png')
-
-    # cora_dataset = torch_geometric.datasets.Planetoid(root=DATASET_PATH, name="Cora")
-
-    m.to('cpu')
-    """
-    # xx = torch.cat((cora_dataset[0].x, m.weight),1)
-
-    # datal = [Data(xx,cora_dataset[0].edge_index)]
-         
-    # datal[0].train_mask = cora_dataset[0].train_mask
-    # datal[0].val_mask = cora_dataset[0].val_mask
-
-    # datal[0].test_mask = cora_dataset[0].test_mask
-    # datal[0].y  = cora_dataset[0].y
-
-    # loader = DataLoader(datal, batch_size=32)
-
-    if args.use_lp:
-        dataset = update_dataset(dataset_org, m.weight)
-    opt = cmd_opt
-    dataset = dataset_org.copy()
-    dataset_enriched = update_dataset(dataset_org, m.weight)
-
     #load model parameters
 
     use_baseline = opt['use_baseline']
@@ -756,6 +762,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_cora_defaults', action='store_true',
                         help='Whether to run with best params for cora. Overrides the choice of dataset')
     # data args
+    parser.add_argument('--use_cache', type=bool, default=False, help='Is their a pretrained version?')
     parser.add_argument('--dataset', type=str, default='Cora',
                         help='Cora, Citeseer, Pubmed, Computers, Photo, CoauthorCS, ogbn-arxiv')
     parser.add_argument('--data_norm', type=str, default='rw',
@@ -793,6 +800,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer_manifold', type=str, default="sgd",
                         help='Choice of manifold optimizer (default: SGD). Choices: Adam')
     parser.add_argument('--epochs_manifold', type=int, default=250, help='number of epochs to train for p-LP ev calculations (default: 250)')
+    
 
 
 
