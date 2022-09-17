@@ -197,6 +197,7 @@ class GatNet(nn.Module):
 
         self.fc1 = torch.nn.Linear(128, 10)
         self.fc2 = torch.nn.Linear(10, 1) 
+        
 
     def forward(self, data):
         x=data.x         
