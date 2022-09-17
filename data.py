@@ -33,7 +33,7 @@ DATA_PATH = f'{ROOT_DIR}/data'
 #   return data
 
 
-def get_dataset(opt: dict, data_dir, use_lcc: bool = False) -> InMemoryDataset:
+def get_dataset(opt: dict, data_dir, use_lcc: bool = True) -> InMemoryDataset:
   
   #todo for Ali to add wikics dataset
   

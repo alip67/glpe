@@ -692,10 +692,10 @@ def main(cmd_opt):
         m.to('cpu')
 
         if args.use_lp:
-            dataset = update_dataset(dataset_org, m.weight[1:K])
+            dataset = update_dataset(dataset_org, m.weight[:,1:K])
         opt = cmd_opt
         dataset = dataset_org.copy()
-        dataset_enriched = update_dataset(dataset_org, m.weight[1:K])
+        dataset_enriched = update_dataset(dataset_org, m.weight[:,1:K])
             
             
 
@@ -809,8 +809,8 @@ if __name__ == '__main__':
                         help='full feature or simple feature')
     parser.add_argument('--filename', type=str, default="output",
                         help='filename to output result (default: )')
-    parser.add_argument('--max_epochs', type=int, default="200",
-                        help='number of epochs to train the GNN (default: 200)')
+    parser.add_argument('--max_epochs', type=int, default="500",
+                        help='number of epochs to train the GNN (default: 500)')
 
     # GNN args
     parser.add_argument('--device', type=int, default=0,
