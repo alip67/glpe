@@ -5,6 +5,7 @@
 
 from nets.ZINC_graph_regression.gatedgcn_net import GatedGCNNet
 from nets.ZINC_graph_regression.gin_net import GINNet
+from nets.ZINC_graph_regression.gine_net import GINENet
 from nets.ZINC_graph_regression.gat_net import GATNet
 from nets.ZINC_graph_regression.pna_net import PNANet
 from nets.ZINC_graph_regression.transformer_net import TransformerNet
@@ -14,6 +15,9 @@ def GatedGCN(net_params):
 
 def GIN(net_params):
     return GINNet(net_params)
+
+def GINE(net_params):
+    return GINENet(net_params)
 
 def GAT(net_params):
     return GATNet(net_params)
@@ -27,7 +31,8 @@ def Transformer(net_params):
 def gnn_model(MODEL_NAME, net_params):
     models = {
         'GatedGCN': GatedGCN,
-        'GIN': GIN, 
+        'GIN': GIN,
+        'GINE': GINE, 
         'GAT': GAT,     
         'PNA': PNA,
         'Transformer': Transformer
