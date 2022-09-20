@@ -91,14 +91,14 @@ class GINNet(nn.Module):
             h = h + p
             p = None
         
-        if not self.edge_feat: # edge feature set to 1
-            e = torch.ones(e.size(0),1).to(self.device)
+        #if not self.edge_feat: # edge feature set to 1
+        #    e = torch.ones(e.size(0),1).to(self.device)
         e = self.embedding_e(e)   
         
         
         # convnets
         for conv in self.layers:
-            h = conv(g, h)
+            h = conv(g, h, e)
             
         g.ndata['h'] = h
         

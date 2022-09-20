@@ -86,7 +86,7 @@ def get_optimizer(name, parameters, lr, weight_decay=0):
   elif name == 'adagrad':
     return torch.optim.Adagrad(parameters, lr=lr, weight_decay=weight_decay)
   elif name == 'adam':
-    return torch.optim.Adam(parameters, lr=lr)
+    return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
   elif name == 'adamax':
     return torch.optim.Adamax(parameters, lr=lr, weight_decay=weight_decay)
   else:
@@ -239,8 +239,8 @@ class NodeLevelGNN(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, acc = self.forward(batch, mode="train")
-        self.log('train_loss', loss)
-        self.log('train_acc', acc)
+        #self.log('train_loss', loss)
+        #self.log('train_acc', acc)
         return loss
 
     """
@@ -295,7 +295,7 @@ def train_node_classifier(model_name, dataset, **model_kwargs):
       model = NodeLevelGNN(model_name=model_name, c_in=cora_dataset.num_node_features + num_eigs, c_out=cora_dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
-    wandb_logger.watch(model, log="all")
+    #≈wandb_logger.watch(model, log="all")
 
 
     # Test best model on the test set
@@ -337,18 +337,23 @@ def train_node_classifier_1(device,num_eigs,CHECKPOINT_PATH,opt_name, lr, weight
     model = NodeLevelGNN(model_name,opt_name, lr, weight_decay, c_in=dataset.num_node_features, c_out=dataset.num_classes, **model_kwargs)
     trainer.fit(model, node_data_loader, node_data_loader)
     model = NodeLevelGNN.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
-
-
+    wandb_logger.watch(model, log="all")
+    
+    model.eval()
     # Test best model on the test set
     test_result = trainer.test(model, node_data_loader, verbose=False)
     batch = next(iter(node_data_loader))
     batch = batch.to(model.device)
+    model.eval()
     _, train_acc = model.forward(batch, mode="train")
     _, val_acc = model.forward(batch, mode="val")
     _, test_acc = model.forward(batch, mode='test')
     result = {"train": train_acc,
               "val": val_acc,
               "test": test_result[0]['test_acc']}
+    wandb.log({'train_acc_best': train_acc})
+    wandb.log({'val_acc_best': val_acc})
+    wandb.log({'test_acc_best': test_acc})
     return model, result
 
 # Small function for printing the test scores
@@ -551,7 +556,7 @@ def training_loop1(model, optimizer, sched,W, epochs=100):
         loss = preds
         loss.backward()
         optimizer.step()
-        sched.step
+        sched.step(loss)
         losses.append(loss)
     return losses
 
@@ -589,7 +594,7 @@ def main(cmd_opt):
     CHECKPOINT_PATH = "../saved_models/node_level"
 
     # Setting the seed
-    pl.seed_everything(42)
+    pl.seed_everything(opt["seed"])
 
     # Ensure that all operations are deterministic on GPU (if used) for reproducibility
     torch.backends.cudnn.deterministic = True
@@ -600,112 +605,134 @@ def main(cmd_opt):
     #dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', opt['not_lcc'])
     dataset_org = get_dataset(opt, f'{ROOT_DIR}/data', True)
         
-    if not opt['use_cache']:
-        cora_adj = to_dense_adj(dataset_org[0].edge_index)
-        cora_adj.squeeze_()
+    num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
+    p = opt['p_laplacian']
+    K = num_eigs  
+    lap_method= opt['lap_method']
 
-        num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
-
-        A = cora_adj.numpy()
-        D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
-
-        p = opt['p_laplacian']
-        alpha = 0.01
-
-        hi = get_orthonromal_eigvec(eigval,eigvec)
-
-        """
-        W = torch.tensor(A)
-
-        n= eigval.shape[0]
-        K = num_eigs
-        epochs = opt['epochs_manifold']
-
-        # instantiate model
-        W = torch.tensor(A).float().to(device)
-        F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
-
-        if opt['manifold'] == "Can Stiefel":
-            m = Model_RGD(F_, p, n, K, ball=geoopt.CanonicalStiefel()).to(device)
-        if opt['manifold'] == "Euc Exact Stiefel":
-            m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
-        if opt['manifold'] == "Euc Stiefel":
-            m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefel()).to(device)
-
-
-        # Instantiate optimizer
-        lr_m = opt['lr_manifold']
-
-        # 1. Start a W&B run
-        wandb.init(project='Node Classification Cora')
-
-        # 2. Save model inputs and hyperparameters
-        config = opt
-        config = wandb.config
-
-        #optim = torch.optim.SGD(m.parameters(), lr=0.01)
-        #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-        #optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr)
-        #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
-        if opt['optimizer_manifold'] == "adam":
-            optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr_m)
-        if opt['optimizer_manifold'] == "sgd":
-            optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=lr_m, momentum=0.9)
-
-        """
         
-        for i in range(1,9):
-            n = eigval.shape[0]
+    if lap_method == "lpe": 
+        if not opt["use_cache"]:
+            cora_adj = to_dense_adj(dataset_org[0].edge_index)
+            cora_adj.squeeze_()
+
+            num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
+            A = cora_adj.numpy()
+            D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')    
+            hi = get_orthonromal_eigvec(eigval,eigvec)
+            dataset_lpe = update_dataset(dataset_org, torch.tensor(hi)[:,1:K])
+
+            dat = opt['dataset']
+            torch.save(dataset_lpe, f'{ROOT_DIR}/dataset_lpe_{dat}.pt')
+        else:
+            dat = opt['dataset']
+            dataset_lpe = torch.load(f'{ROOT_DIR}/dataset_lpe_{dat}.pt')
+    #load model parameters
+
+
+    if lap_method == "p_lpe":
+        if not opt['use_cache']: 
+            p = opt['p_laplacian']
+            alpha = 0.01
+            cora_adj = to_dense_adj(dataset_org[0].edge_index)
+            cora_adj.squeeze_()
+
+            num_eigs = opt['num_eigs']   #gives the dimension of the embedding or/ the number of eigenvectors we calculate
+            A = cora_adj.numpy()
+            D, L, L_inv, eigval,eigvec = get_graph_props(A,normalize_L='none')
+            hi = get_orthonromal_eigvec(eigval,eigvec)
+        
+            
+            """
+            W = torch.tensor(A)
+        
+            n= eigval.shape[0]
             K = num_eigs
-            epochs = 1000
+            epochs = opt['epochs_manifold']
 
             # instantiate model
-            p = 2- (i/10)
-
             W = torch.tensor(A).float().to(device)
-            if i == 1:
-                F_ = torch.tensor(hi[:,  :num_eigs]).float().to(device) #We can use previous outputs weight
-            else: F_ = m.weight.clone()
+            F_ = torch.tensor(hi[:, 0:num_eigs]).float().to(device) #We can use previous outputs weight
 
-            m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device)
+            if opt['manifold'] == "Can Stiefel":
+                m = Model_RGD(F_, p, n, K, ball=geoopt.CanonicalStiefel()).to(device)
+            if opt['manifold'] == "Euc Exact Stiefel":
+                m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefelExact()).to(device)
+            if opt['manifold'] == "Euc Stiefel":
+                m = Model_RGD(F_, p, n, K, ball=geoopt.EuclideanStiefel()).to(device)
+
 
             # Instantiate optimizer
+            lr_m = opt['lr_manifold']
+            """
+            # 1. Start a W&B run
+            wandb.init(project='Node Classification Cora')
+
+            # 2. Save model inputs and hyperparameters
+            config = opt
+            config = wandb.config
+            """
+            #optim = torch.optim.SGD(m.parameters(), lr=0.01)
             #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-            #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-3)
-            optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-3)
-
+            #optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr)
             #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+            if opt['optimizer_manifold'] == "adam":
+                optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=lr_m)
+            if opt['optimizer_manifold'] == "sgd":
+                optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=lr_m, momentum=0.9)
 
-            decayRate = 0.99
-            #my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
-            #my_lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, threshold=1, threshold_mode='rel', cooldown=0, min_lr=0, eps=1e-08, verbose=False)
-            #my_lr_scheduler = None
-            my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
-            #my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.25)
+            """
+            
+            for i in range(1,9):
+                n = eigvec.shape[0]
+                K = num_eigs
+                epochs = 1000
+
+                # instantiate model
+                p = 2- (i/10)
+
+                W = torch.tensor(A).float().to(device)
+                if i == 1:
+                    F_ = torch.tensor(hi[:,  :num_eigs]).float().to(device) #We can use previous outputs weight
+                else: F_ = m.weight.clone()
+
+                m = Model_RGD(F_, p, n, K, ball = geoopt.EuclideanStiefelExact()).to(device)
+
+                # Instantiate optimizer
+                #opt = torch.optim.Adam(params=m.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+                #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-3)
+                optimizer = geoopt.optim.RiemannianAdam(m.parameters(), lr=1e-3)
+
+                #optimizer = geoopt.optim.RiemannianSGD(m.parameters(), lr=1e-2, momentum=0.9)
+
+                decayRate = 0.99
+                #my_lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer=optimizer)#, gamma=decayRate)
+                #my_lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, threshold=1, threshold_mode='rel', cooldown=0, min_lr=0, eps=1e-08, verbose=False)
+                #my_lr_scheduler = None
+                my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+                #my_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.25)
 
 
-            #Learn the 1-eigenvector. It is then given by m.weight
-            start = timer()
-            losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  
-            end = timer()
-            print(end - start, " Second")
-        m.to('cpu')
+                #Learn the 1-eigenvector. It is then given by m.weight
+                start = timer()
+                losses = training_loop1(m, optimizer,my_lr_scheduler,W, epochs)  
+                end = timer()
+                print(end - start, " Second")
+            m.to('cpu')
 
-        if args.use_lp:
-            dataset = update_dataset(dataset_org, m.weight[:,1:K])
-        opt = cmd_opt
-        dataset = dataset_org.copy()
-        dataset_enriched = update_dataset(dataset_org, m.weight[:,1:K])
+        
+            opt = cmd_opt
+            dataset_enriched = update_dataset(dataset_org, m.weight[:,1:K])
+            
+
             
             
 
-        
-        
-
-
-        torch.save(dataset_enriched, f'{ROOT_DIR}/p-embeddings/dataset_enriched.pt')            
-    else: dataset_enriched = torch.load(f'{ROOT_DIR}/p-embeddings/dataset_enriched.pt')
-    
+            dat = opt['dataset']
+            torch.save(dataset_enriched, f'{ROOT_DIR}/dataset_enriched_{dat}.pt')            
+        else:
+            dat = opt['dataset']
+            dataset_enriched = torch.load(f'{ROOT_DIR}/dataset_enriched_{dat}.pt')
     #load model parameters
 
     use_baseline = opt['use_baseline']
@@ -714,9 +741,10 @@ def main(cmd_opt):
     weight_decay = opt['decay']
 
 
-
+    lap_method= opt['lap_method']
+    
     # Standard dataset
-    if use_baseline:
+    if lap_method=="no_lpe":
         node_gnn_model, node_gnn_result = train_node_classifier_1(device,
                                                                 num_eigs,
                                                                 CHECKPOINT_PATH,
@@ -726,7 +754,7 @@ def main(cmd_opt):
                                                                 dataset_type="original",
                                                                 model_name="GCN",
                                                                 layer_name="GCN",
-                                                                dataset=dataset,
+                                                                dataset=dataset_org,
                                                                 max_epochs = opt['max_epochs'],
                                                                 c_hidden=opt['hidden_channels'],
                                                                 num_layers=opt['num_layers'],
@@ -734,35 +762,55 @@ def main(cmd_opt):
                                                                   )
         print_results(node_gnn_result)
 
-
         #Pretransformed with p-LPE
-    node_gnn_model, node_gnn_result = train_node_classifier_1(device,
-                                                        num_eigs,
-                                                        CHECKPOINT_PATH,
-                                                        opt_name=opt_name,
-                                                        lr=lr,
-                                                        weight_decay=weight_decay,
-                                                        dataset_type="lp",
-                                                        model_name="GCN",
-                                                        layer_name="GCN",
-                                                        dataset=dataset_enriched,
-                                                        max_epochs = opt['max_epochs'],
-                                                        c_hidden=opt['hidden_channels'],
-                                                        num_layers=opt['num_layers'],
-                                                        dp_rate=opt['dropout']
-                                                          )
+    if lap_method=="lpe":    
+        node_gnn_model, node_gnn_result = train_node_classifier_1(device,
+                                                                num_eigs,
+                                                                CHECKPOINT_PATH,
+                                                                opt_name=opt_name,
+                                                                lr=lr,
+                                                                weight_decay=weight_decay,
+                                                                dataset_type="lp",
+                                                                model_name="GCN",
+                                                                layer_name="GCN",
+                                                                dataset=dataset_lpe,
+                                                                max_epochs = opt['max_epochs'],
+                                                                c_hidden=opt['hidden_channels'],
+                                                                num_layers=opt['num_layers'],
+                                                                dp_rate=opt['dropout']
+                                                                 )
+        print_results(node_gnn_result)
+    if lap_method=="p_lpe":
+        node_gnn_model, node_gnn_result = train_node_classifier_1(device,
+                                                                num_eigs,
+                                                                CHECKPOINT_PATH,
+                                                                opt_name=opt_name,
+                                                                lr=lr,
+                                                                weight_decay=weight_decay,
+                                                                dataset_type="lp",
+                                                                model_name="GCN",
+                                                                layer_name="GCN",
+                                                                dataset=dataset_enriched,
+                                                                max_epochs = opt['max_epochs'],
+                                                                c_hidden=opt['hidden_channels'],
+                                                                num_layers=opt['num_layers'],
+                                                                dp_rate=opt['dropout']
+                                                                 ) 
     print_results(node_gnn_result)
-    val_acc = node_gnn_result["val"]
-
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
+
+    parser.add_argument("--seed", type=int, default=42,
+                        help="The random seed")
+
+
+    
     parser.add_argument('--use_cora_defaults', action='store_true',
                         help='Whether to run with best params for cora. Overrides the choice of dataset')
     # data args
-    parser.add_argument('--use_cache', type=bool, default=False, help='Is their a pretrained version?')
+    parser.add_argument('--use_cache', type=bool, default=True, help='Is their a pretrained version?')
     parser.add_argument('--dataset', type=str, default='Cora',
                         help='Cora, Citeseer, Pubmed, Computers, Photo, CoauthorCS, ogbn-arxiv')
     parser.add_argument('--data_norm', type=str, default='rw',
@@ -789,6 +837,8 @@ if __name__ == '__main__':
 
 
     # Preprocessing args
+    parser.add_argument("--lap_method", type=str, default="p_lpe",
+                        help="no_lpe, lpe, or p_lpe")
     parser.add_argument('--use_lp', action='store_true',
                         help='use LPE eigenfunctions')
     parser.add_argument('--use_baseline', type=bool, default=False,
@@ -819,7 +869,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_sage', action='store_true')
     parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--hidden_channels', type=int, default=16)
-    parser.add_argument('--dropout', type=float, default=0.1)
+    parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--p_laplacian', type=float, default=1,

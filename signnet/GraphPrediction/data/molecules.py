@@ -229,7 +229,7 @@ def init_positional_encoding(g, pos_enc_dim, type_init):
     
     return g
 
-def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
+def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False, k=5):
     ran = range(A.shape[0])
 
     D = np.zeros_like(A)
@@ -249,7 +249,7 @@ def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
     else:
         raise ValueError('unsupported normalization option')
 
-    eigval, eigvec = np.linalg.eigh(L)
+    eigval, eigvec = scipy.sparse.linalg.eigs(L, k) #np.linalg.eigh(L)
     eigval =  np.real(eigval)
     # eigidx = np.argsort(eigval)[::-1]
     eigidx = np.argsort(eigval)
@@ -420,6 +420,8 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     else: 
         K = pos_enc_dim+1 
     
+
+    """
     #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).todense()
     A = np.asarray(A)
@@ -447,7 +449,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     idx = eigval.argsort() # increasing order
     eigval, hi = eigval[idx], np.real(hi[:,idx])
     hi = eigvec
-    """
+    
     start = timer()
 
     for i in range(1,5):

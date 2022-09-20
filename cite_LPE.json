@@ -1,0 +1,19 @@
+{
+    "lr": 0.09729850953897488,
+    "c_in": 3703,
+    "c_out": 6,
+    "decay": 0.0817813678203134,
+    "dataset": "Citeseer",
+    "dp_rate": 0.4107396642377084,
+    "dropout": 0.4107396642377084,
+    "c_hidden": 16,
+    "opt_name": "adam",
+    "use_cache": false,
+    "lap_method": "lpe",
+    "layer_name": "GCN",
+    "model_name": "GCN",
+    "num_layers": 2,
+    "weight_decay": 0.0817813678203134,
+    "hidden_channels": 16
+}
+

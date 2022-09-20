@@ -1,4 +1,4 @@
-
+import scipy
 import numpy as np
 import networkx as nx
 import os
@@ -12,7 +12,7 @@ def make_2d_graph(m, n, periodic=False, return_pos=False):
     matrix = np.array(matrix).astype(float)
     return matrix
 
-def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
+def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False, k=8):
     ran = range(A.shape[0])
 
     D = np.zeros_like(A)
@@ -32,7 +32,7 @@ def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
     else:
         raise ValueError('unsupported normalization option')
 
-    eigval, eigvec = np.linalg.eigh(L)
+    eigval, eigvec = scipy.sparse.linalg.eigs(L, k)#np.linalg.eigh(L)
     eigval =  np.real(eigval)
     # eigidx = np.argsort(eigval)[::-1]
     eigidx = np.argsort(eigval)
@@ -40,7 +40,7 @@ def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False):
     eigvec = eigvec[:, eigidx]
 
 
-    L_inv = np.linalg.pinv(L)
+    L_inv = 0# np.linalg.pinv(L)
 
     if shift_to_zero_diag:
         L_inv_diag = L_inv[np.eye(L.shape[0])>0]

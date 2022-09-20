@@ -25,9 +25,9 @@
     
     "net_params": {
 	"pe_init": "lap_p_pe",
-        "p_lap_epochs": 1000,
-        "p_laplacian": 1,
-        "pos_enc_dim": 16,
+        "p_lap_epochs": 200,
+        "p_laplacian": 1.6,
+        "pos_enc_dim": 4,
 
         "L": 16,
         "hidden_dim": 122,

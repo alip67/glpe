@@ -1,0 +1,160 @@
+{
+    "lr": {
+        "desc": null,
+        "value": 0.02866856226675557
+    },
+    "c_in": {
+        "desc": null,
+        "value": 1433
+    },
+    "c_out": {
+        "desc": null,
+        "value": 7
+    },
+    "decay": {
+        "desc": null,
+        "value": 0.004028738779513221
+    },
+    "_wandb": {
+        "desc": null,
+        "value": {
+            "m": [
+                {
+                    "1": "trainer/global_step",
+                    "6": [
+                        3
+                    ]
+                },
+                {
+                    "1": "val_acc",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                },
+                {
+                    "1": "epoch",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                },
+                {
+                    "1": "test_acc",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                },
+                {
+                    "1": "train_acc_best",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                },
+                {
+                    "1": "val_acc_best",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                },
+                {
+                    "1": "test_acc_best",
+                    "5": 1,
+                    "6": [
+                        1
+                    ]
+                }
+            ],
+            "t": {
+                "1": [
+                    1,
+                    5,
+                    9,
+                    41,
+                    53,
+                    55,
+                    76,
+                    77
+                ],
+                "2": [
+                    1,
+                    5,
+                    9,
+                    41,
+                    53,
+                    55,
+                    76,
+                    77
+                ],
+                "3": [
+                    1,
+                    5,
+                    7,
+                    23
+                ],
+                "4": "3.10.4",
+                "5": "0.13.3",
+                "8": [
+                    5
+                ]
+            },
+            "framework": "lightning",
+            "start_time": 1663572930.363556,
+            "cli_version": "0.13.3",
+            "is_jupyter_run": false,
+            "python_version": "3.10.4",
+            "is_kaggle_kernel": false
+        }
+    },
+    "dataset": {
+        "desc": null,
+        "value": "Cora"
+    },
+    "dp_rate": {
+        "desc": null,
+        "value": 0.4298313977891327
+    },
+    "dropout": {
+        "desc": null,
+        "value": 0.4298313977891327
+    },
+    "c_hidden": {
+        "desc": null,
+        "value": 128
+    },
+    "opt_name": {
+        "desc": null,
+        "value": "adam"
+    },
+    "use_cache": {
+        "desc": null,
+        "value": true
+    },
+    "lap_method": {
+        "desc": null,
+        "value": "no_lpe"
+    },
+    "layer_name": {
+        "desc": null,
+        "value": "GCN"
+    },
+    "model_name": {
+        "desc": null,
+        "value": "GCN"
+    },
+    "num_layers": {
+        "desc": null,
+        "value": 2
+    },
+    "weight_decay": {
+        "desc": null,
+        "value": 0.004028738779513221
+    },
+    "hidden_channels": {
+        "desc": null,
+        "value": 128
+    }
+}
