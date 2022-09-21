@@ -53,7 +53,7 @@ class TransformerNet(nn.Module):
 
         self.pe_aggregate = net_params['pe_aggregate']
         
-        if self.pe_init in ['rand_walk', 'lap_pe']:
+        if self.pe_init in ['rand_walk', 'lap_pe','lap_p_pe']:
             self.embedding_p = nn.Linear(self.pos_enc_dim, hidden_dim)
 
         self.embedding_h = nn.Embedding(num_atom_type, hidden_dim)
@@ -89,10 +89,10 @@ class TransformerNet(nn.Module):
         h = self.embedding_h(h)
         h = self.in_feat_dropout(h)
         
-        if self.pe_init in ['rand_walk', 'lap_pe']:
+        if self.pe_init in ['rand_walk', 'lap_pe','lap_p_pe']:
             p = self.embedding_p(p) 
             
-        if self.pe_init == 'lap_pe' and not self.lap_lspe:
+        if (self.pe_init == 'lap_pe' or self.pe_init == 'lap_p_pe') and not self.lap_lspe:
 
             if self.pe_aggregate=='concat':
                 h = torch.cat([h, p], dim=1)

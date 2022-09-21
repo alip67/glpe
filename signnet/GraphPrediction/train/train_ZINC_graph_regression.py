@@ -70,7 +70,7 @@ def train_epoch_sparse(model, optimizer, device, data_loader, epoch):
         except KeyError:
             batch_pos_enc = None
         
-        if model.pe_init == 'lap_pe':
+        if model.pe_init == 'lap_pe' or model.pe_init == 'lap_p_pe' or model.pe_init == 'rand_walk':
             batch_pos_enc = handle_lap(model, batch_pos_enc, batch_graphs, device)
             
         batch_scores, __ = model.forward(batch_graphs, batch_x, batch_pos_enc, batch_e, batch_snorm_n)
@@ -106,7 +106,7 @@ def evaluate_network_sparse(model, device, data_loader, epoch):
             except KeyError:
                 batch_pos_enc = None
 
-            if model.pe_init == 'lap_pe':
+            if model.pe_init == 'lap_pe' or model.pe_init == 'lap_p_pe' or model.pe_init == 'rand_walk':
                 batch_pos_enc = handle_lap(model, batch_pos_enc, batch_graphs, device)
                                
             batch_scores, batch_g = model.forward(batch_graphs, batch_x, batch_pos_enc, batch_e, batch_snorm_n)
