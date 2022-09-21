@@ -13,6 +13,9 @@ import numpy as np
 # import geotorch
 import geoopt
 
+import random
+import dgl
+
 ### importing OGB
 # from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 from torch_geometric.utils import to_networkx, to_dense_adj
@@ -591,13 +594,15 @@ def main(cmd_opt):
     CHECKPOINT_PATH = "../saved_models/node_level"
 
     # Setting the seed
-    pl.seed_everything(opt["seed"])
-    torch.manual_seed(opt["seed"])
-    np.random.seed(opt["seed"])
+    #pl.seed_everything(opt["seed"])
+    #torch.manual_seed(opt["seed"])
+    #np.random.seed(opt["seed"])
+    seed_all(opt["seed"])
+    
 
     # Ensure that all operations are deterministic on GPU (if used) for reproducibility
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    #torch.backends.cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = False
 
     ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
     
@@ -796,6 +801,23 @@ def main(cmd_opt):
                                                                 dp_rate=opt['dropout']
                                                                  ) 
     print_results(node_gnn_result)
+
+
+
+def seed_all(seed):
+    if not seed:
+        seed = 42
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+    dgl.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 
 
 if __name__ == '__main__':

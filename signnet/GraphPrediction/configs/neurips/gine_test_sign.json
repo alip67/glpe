@@ -48,7 +48,7 @@
         "sign_inv_layers": 8, 
         "sign_inv_activation": "relu",
         "pe_aggregate": "concat",
-        "phi_out_dim": 16,
+        "phi_out_dim": 4,
 
         "lap_lspe": false
     }

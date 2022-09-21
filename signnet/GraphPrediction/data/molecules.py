@@ -209,7 +209,7 @@ def init_positional_encoding(g, pos_enc_dim, type_init):
     """
     
     n = g.number_of_nodes()
-
+    """
     if type_init == 'rand_walk':
         # Geometric diffusion features with Random Walk
         A = g.adjacency_matrix(scipy_fmt="csr")
@@ -226,7 +226,29 @@ def init_positional_encoding(g, pos_enc_dim, type_init):
             PE.append(torch.from_numpy(M_power.diagonal()).float())
         PE = torch.stack(PE,dim=-1)
         g.ndata['pos_enc'] = PE  
-    
+    """
+    A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).toarray()
+    D = np.diag((dgl.backend.asnumpy(g.in_degrees()).clip(1)))
+    L = D-A
+
+    # Eigenvectors with numpy
+    EigVal, EigVec = np.linalg.eig(L)
+    idx = EigVal.argsort() # increasing order
+    EigVal, EigVec = EigVal[idx], np.real(EigVec[:,idx])
+    g.ndata['pos_enc'] = torch.from_numpy(EigVec[:,1:pos_enc_dim+1]).float()
+
+    # # Eigenvectors with scipy
+    # EigVal, EigVec = sp.linalg.eigs(L, k=pos_enc_dim+1, which='SR')
+    # EigVec = EigVec[:, EigVal.argsort()] # increasing order
+    # g.ndata['pos_enc'] = torch.from_numpy(np.abs(EigVec[:,1:pos_enc_dim+1])).float() 
+
+    # zero padding to the end if n < pos_enc_dim
+    n = g.number_of_nodes()
+    if n <= pos_enc_dim:
+        g.ndata['pos_enc'] = F.pad(g.ndata['pos_enc'], (0, pos_enc_dim - n + 1), value=float('0'))
+
+    g.ndata['eigvec'] = g.ndata['pos_enc']
+
     return g
 
 def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False, k=5):
