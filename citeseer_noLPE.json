@@ -1,11 +1,11 @@
 {
-    "lr": 0.08814369299702858,
+    "lr": 0.09027770374438988,
     "c_in": 3703,
     "c_out": 6,
-    "decay": 0.09301363760208949,
+    "decay": 0.08620938824674064,
     "dataset": "Citeseer",
-    "dp_rate": 0.09264941958218292,
-    "dropout": 0.092649419582182929,
+    "dp_rate": 0.03327116304616312,
+    "dropout": 0.03327116304616312,
     "c_hidden": 16,
     "opt_name": "adam",
     "use_cache": true,
@@ -13,7 +13,7 @@
     "layer_name": "GCN",
     "model_name": "GCN",
     "num_layers": 2,
-    "weight_decay": 0.09301363760208949,
+    "weight_decay": 0.08620938824674064,
     "hidden_channels": 16
 }
 

@@ -32,7 +32,7 @@ def get_graph_props(A, normalize_L='none', shift_to_zero_diag=False, k=8):
     else:
         raise ValueError('unsupported normalization option')
 
-    eigval, eigvec = scipy.sparse.linalg.eigs(L, k)#np.linalg.eigh(L)
+    eigval, eigvec = np.linalg.eigh(L) #scipy.sparse.linalg.eigs(L, k)#np.linalg.eigh(L)
     eigval =  np.real(eigval)
     # eigidx = np.argsort(eigval)[::-1]
     eigidx = np.argsort(eigval)

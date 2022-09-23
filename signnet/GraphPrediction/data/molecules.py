@@ -459,9 +459,17 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     """
     tau=0
     A = g.adjacency_matrix_scipy(return_edge_ids=False).astype(float).toarray() + tau / g.number_of_nodes()
-    D = np.diag((dgl.backend.asnumpy(g.in_degrees()).clip(1) + tau))
-    L = D-A
 
+    Dinv = sp.diags(dgl.backend.asnumpy(g.in_degrees()).clip(1) ** -1.0, dtype=float) # D^-1
+    RW = Dinv*A  
+    
+
+
+    #D = np.diag((dgl.backend.asnumpy(g.in_degrees()).clip(1) + tau))
+    L = np.eye(g.number_of_nodes()) - RW
+
+
+    
     # Eigenvectors with PYTORCH
     # Reason: pytorch has the fct torch.linalg.eigh which directly gives an ONB.
     eigval, eigvec = torch.linalg.eigh(torch.tensor(L))
@@ -469,8 +477,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
     eigvec = eigvec.numpy()
     
     idx = eigval.argsort() # increasing order
-    eigval, hi = eigval[idx], np.real(hi[:,idx])
-    hi = eigvec
+    eigval, hi = eigval[idx], np.real(eigvec[:,idx])
     
     start = timer()
 
@@ -478,7 +485,7 @@ def p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device):
         n = eigval.shape[0]
         p = 2- (i/10)
 
-        W = torch.tensor(A).float()#.to(device)
+        W = torch.tensor(RW).float()#.to(device)
         if i == 1:
             F_ = torch.tensor(hi[:, :K]).float()#.to(device) #We can use previous outputs weight
         else: F_ = m.weight.clone()
@@ -654,17 +661,17 @@ class MoleculeDataset(torch.utils.data.Dataset):
         ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
         if use_cache:
-            self.train.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_p{p}.pt')
-            self.val.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_p{p}.pt')
-            self.test.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_p{p}.pt')
+            self.train.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_unp{p}.pt')
+            self.val.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_unp{p}.pt')
+            self.test.graph_lists = torch.load(f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_unp{p}.pt')
         else: 
             # Initializing p-positional encoding eith model RGD
             self.val.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.val.graph_lists]
-            torch.save(self.val.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_p{p}.pt')
+            torch.save(self.val.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_valid_emb{pos_enc_dim}_unp{p}.pt')
             self.train.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.train.graph_lists]         
             self.test.graph_lists = [p_lap_positional_encoding(g, pos_enc_dim, epochs,p,device) for g in self.test.graph_lists]
-            torch.save(self.train.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_p{p}.pt')            
-            torch.save(self.test.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_p{p}.pt')
+            torch.save(self.train.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_train_emb{pos_enc_dim}_unp{p}.pt')            
+            torch.save(self.test.graph_lists, f'{ROOT_DIR}/p-embeddings/zinc_test_emb{pos_enc_dim}_unp{p}.pt')
         
     def _make_full_graph(self, adaptive_weighting=None):
         self.train.graph_lists = [make_full_graph(g, adaptive_weighting) for g in self.train.graph_lists]

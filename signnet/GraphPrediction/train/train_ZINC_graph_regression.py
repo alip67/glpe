@@ -82,6 +82,8 @@ def train_epoch_sparse(model, optimizer, device, data_loader, epoch):
         epoch_loss += loss.detach().item()
         epoch_train_mae += MAE(batch_scores, batch_targets)
         nb_data += batch_targets.size(0)
+        #optimizer.zero_grad()
+        #loss.detach_()
     epoch_loss /= (iter + 1)
     epoch_train_mae /= (iter + 1)
     

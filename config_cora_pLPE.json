@@ -1,19 +1,19 @@
 {
-    "lr": 0.028482344055900676,
+    "lr": 0.09892346016877948,
     "c_in": 1433,
     "c_out": 7,
-    "decay": 0.018827781310018457,
+    "decay": 0.04694967735335153,
     "Dataset": "Cora",
-    "dp_rate": 0.10137855357560915,
-    "dropout": 0.10137855357560915,
-    "c_hidden": 128,
+    "dp_rate": 0.3966523586662913,
+    "dropout": 0.3966523586662913,
+    "c_hidden": 32,
     "opt_name": "adam",
     "use_cache": true,
     "lap_method": "p_lpe",
     "layer_name": "GCN",
     "model_name": "GCN",
     "num_layers": 2,
-    "weight_decay": 0.018827781310018457,
-    "hidden_channels": 128
+    "weight_decay": 0.04694967735335153,
+    "hidden_channels": 32
 }
 

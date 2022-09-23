@@ -26,7 +26,7 @@
     "net_params": {
         "pe_init": "lap_p_pe",
         "p_lap_epochs": 200,
-        "p_laplacian": 1.2,
+        "p_laplacian": 1.6,
         "pos_enc_dim": 4,
 
         "full_graph": false,
@@ -39,7 +39,7 @@
         "edge_feat": true,
         "readout": "sum",
         "in_feat_dropout": 0.0,
-        "dropout": 0.3,
+        "dropout": 0.0,
         "batch_norm": true,
         "layer_norm": true,
         

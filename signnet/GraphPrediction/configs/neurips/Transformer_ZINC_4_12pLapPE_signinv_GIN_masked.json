@@ -39,7 +39,7 @@
         "edge_feat": true,
         "readout": "sum",
         "in_feat_dropout": 0.0,
-        "dropout": 0.5,
+        "dropout": 0.0,
         "batch_norm": true,
         "layer_norm": true,
         

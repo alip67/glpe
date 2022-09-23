@@ -1,0 +1,19 @@
+{
+    "lr": 0.08917560457025807,
+    "c_in": 1439,
+    "c_out": 7,
+    "decay": 0.02886706511661197,
+    "Dataset": "Cora",
+    "dp_rate": 0.16832906966209132,
+    "dropout": 0.16832906966209132,
+    "c_hidden": 64,
+    "opt_name": "adam",
+    "use_cache": false,
+    "lap_method": "no_lpe",
+    "layer_name": "GCN",
+    "model_name": "GCN",
+    "num_layers": 2,
+    "weight_decay": 0.02886706511661197,
+    "hidden_channels": 64
+}
+

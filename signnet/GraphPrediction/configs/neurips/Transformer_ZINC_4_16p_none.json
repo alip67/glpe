@@ -47,7 +47,7 @@
         "lambda_loss": 1,
         "lap_lspe": false,        
 
-        "lap_method": "none",
+        "lap_method": "lappe",
         "pe_aggregate": "concat"
     }
 }
